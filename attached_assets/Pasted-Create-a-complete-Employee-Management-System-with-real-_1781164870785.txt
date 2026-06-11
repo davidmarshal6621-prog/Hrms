@@ -1,0 +1,25 @@
+Create a complete Employee Management System with real-time ZKTeco biometric attendance integration using Python (Flask) or Node.js. The system needs to be structured so it can connect with my existing domain hosting database (MySQL/PostgreSQL) via environment variables.
+
+### 1. User Roles & Access Control (RBAC):
+Create a robust authentication system with the following distinct login portals and dashboards:
+- Super Admin: Full system access, company settings, database management, log viewing, and managing Admins.
+- Admin: Manage branches, departments, system configurations, and HR accounts.
+- HR Login: Manage employee onboarding, documents, salary structures, leave approvals, shifts, and attendance corrections.
+- Manager Login: View team attendance, approve team leaves, track team performance, and view department reports.
+- Employee Login: Personal dashboard, mark web-attendance (optional), view monthly attendance logs, check leave balance, request leaves, and download payslips.
+
+### 2. Core Modules to Include:
+- Employee Directory: Complete profile management (Personal info, Designation, Department, Date of Joining, CNIC/ID, Contact, Salary details, Active/Inactive status).
+- Attendance Module: Real-time logs grid, late-coming/early-out tracking, total working hours calculation, and manual attendance correction request workflow.
+- Leave Management: Leave types (Casual, Sick, Annual), leave application submission, and multi-level approval workflow (Manager -> HR).
+- Payroll Management: Basic salary, allowances, deductions based on late arrivals/unpaid leaves, and payslip generation.
+
+### 3. ZKTeco Real-time Attendance Integration:
+- Implement a background listener or API endpoint compatible with ZKTeco ADMS (Automatic Data Master Server) protocol or a python-zk library integration wrapper to capture real-time punches (Device ID, User ID/Enroll Number, Timestamp).
+- Ensure that whenever a user punches on the biometric machine, the data parses in real-time and updates the central attendance table.
+- Provide a setup guide in the README on how to point the ZKTeco machine's ADMS/Cloud Server settings to this Replit app's URL.
+
+### 4. Technical Requirements:
+- Use Tailwind CSS or Bootstrap for a clean, professional, and fully responsive dashboard UI.
+- Use SQLAlchemy (if Python) or Prisma/Sequelize (if Node.js) for database operations, making it easy to plug in external MySQL/PostgreSQL credentials via a .env file.
+- Implement secure password hashing (bcrypt) and session management.

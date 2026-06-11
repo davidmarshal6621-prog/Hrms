@@ -1,0 +1,3 @@
+- [Orval hook call signatures](orval-hook-signatures.md) — params go as first arg directly, not wrapped in query:{}; enabled requires full UseQueryOptions
+- [bcryptjs vs bcrypt](bcryptjs-preference.md) — use bcryptjs (pure JS) instead of bcrypt (needs native build approval)
+- [EMS demo credentials](ems-demo-credentials.md) — login credentials for all 5 roles

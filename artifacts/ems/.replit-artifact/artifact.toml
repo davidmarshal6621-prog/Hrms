@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Employee Management System"
+version = "1.0.0"
+id = "artifacts/ems"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23782
+
+[services.development]
+run = "pnpm --filter @workspace/ems run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ems", "run", "build" ]
+publicDir = "artifacts/ems/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23782"
+BASE_PATH = "/"
