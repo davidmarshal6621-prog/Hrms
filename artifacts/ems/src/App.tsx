@@ -19,12 +19,13 @@ import DepartmentsList from "@/pages/departments/index";
 import BranchesList from "@/pages/branches/index";
 import ShiftsList from "@/pages/shifts/index";
 import UsersList from "@/pages/users/index";
+import DevicesPage from "@/pages/devices/index";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ component: Component, ...rest }: any) {
-  const { isAuthenticated } = useAuth();
+function ProtectedRoute({ component: Component, roles, ...rest }: any) {
+  const { isAuthenticated, user } = useAuth();
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
@@ -34,6 +35,9 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
   }, [isAuthenticated, location, setLocation]);
 
   if (!isAuthenticated) return null;
+  if (roles && !roles.includes(user?.role)) {
+    return <div className="p-8 text-gray-500">You don't have permission to view this page.</div>;
+  }
 
   return (
     <AppLayout>
@@ -41,6 +45,8 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
     </AppLayout>
   );
 }
+
+const ADMIN_ROLES = ["super_admin", "admin", "hr"];
 
 function Router() {
   return (
@@ -52,23 +58,24 @@ function Router() {
         return null;
       }} />
       <Route path="/dashboard"><ProtectedRoute component={Dashboard} /></Route>
-      
+
       <Route path="/employees"><ProtectedRoute component={EmployeesList} /></Route>
       <Route path="/employees/new"><ProtectedRoute component={NewEmployee} /></Route>
       <Route path="/employees/:id"><ProtectedRoute component={EmployeeProfile} /></Route>
-      
+
       <Route path="/attendance"><ProtectedRoute component={AttendanceList} /></Route>
-      
+
       <Route path="/leaves"><ProtectedRoute component={LeavesList} /></Route>
       <Route path="/leaves/new"><ProtectedRoute component={NewLeave} /></Route>
-      
-      <Route path="/payroll"><ProtectedRoute component={PayrollList} /></Route>
 
-      <Route path="/departments"><ProtectedRoute component={DepartmentsList} /></Route>
-      <Route path="/branches"><ProtectedRoute component={BranchesList} /></Route>
-      <Route path="/shifts"><ProtectedRoute component={ShiftsList} /></Route>
-      <Route path="/users"><ProtectedRoute component={UsersList} /></Route>
-      
+      <Route path="/payroll"><ProtectedRoute component={PayrollList} roles={ADMIN_ROLES} /></Route>
+
+      <Route path="/departments"><ProtectedRoute component={DepartmentsList} roles={ADMIN_ROLES} /></Route>
+      <Route path="/branches"><ProtectedRoute component={BranchesList} roles={["super_admin", "admin"]} /></Route>
+      <Route path="/shifts"><ProtectedRoute component={ShiftsList} roles={["super_admin", "admin"]} /></Route>
+      <Route path="/users"><ProtectedRoute component={UsersList} roles={["super_admin", "admin"]} /></Route>
+      <Route path="/devices"><ProtectedRoute component={DevicesPage} roles={["super_admin", "admin"]} /></Route>
+
       <Route component={NotFound} />
     </Switch>
   );
