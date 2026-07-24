@@ -11,7 +11,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, RefreshCw, Wifi, WifiOff, Upload, Trash2, Settings } from "lucide-react";
+import { Plus, RefreshCw, Wifi, WifiOff, Upload, Trash2, Settings, Users } from "lucide-react";
 
 interface Device {
   id: number; name: string; ip: string; port: number;
@@ -37,6 +37,7 @@ export default function DevicesPage() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [syncingId, setSyncingId] = useState<number | null>(null);
+  const [importingId, setImportingId] = useState<number | null>(null);
   const [syncLog, setSyncLog] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", ip: "", port: "4370", location: "" });
 
@@ -50,7 +51,12 @@ export default function DevicesPage() {
       method: "POST",
       body: JSON.stringify({ ...data, port: parseInt(data.port) }),
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["devices"] }); setShowAdd(false); setForm({ name: "", ip: "", port: "4370", location: "" }); toast({ title: "Device added" }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["devices"] });
+      setShowAdd(false);
+      setForm({ name: "", ip: "", port: "4370", location: "" });
+      toast({ title: "Device added" });
+    },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
@@ -58,6 +64,39 @@ export default function DevicesPage() {
     mutationFn: (id: number) => apiFetch(`/devices/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["devices"] }); toast({ title: "Device removed" }); },
   });
+
+  async function handleImportUsers(device: Device) {
+    setImportingId(device.id);
+    setSyncLog(null);
+    try {
+      const token = localStorage.getItem("ems_token");
+      const res = await fetch(`/api/devices/${device.id}/import-users`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncLog(`❌ Import Failed: ${data.error || "Unknown error"}`);
+        toast({ title: "Import failed", description: data.error, variant: "destructive" });
+      } else {
+        setSyncLog(
+          `✅ ${data.message}\n` +
+          `👥 Total users in device: ${data.total}\n` +
+          `🆕 Created: ${data.created} new employees\n` +
+          `🔄 Updated: ${data.updated} existing employees\n` +
+          `⏭️  Skipped: ${data.skipped} already mapped\n\n` +
+          `⚡ Now click "Sync Now" to pull all attendance records.`
+        );
+        toast({ title: "Users imported", description: data.message });
+        qc.invalidateQueries({ queryKey: ["devices"] });
+      }
+    } catch (e: any) {
+      setSyncLog(`❌ Network error: ${e.message}`);
+      toast({ title: "Import error", description: e.message, variant: "destructive" });
+    } finally {
+      setImportingId(null);
+    }
+  }
 
   async function handleSync(device: Device) {
     setSyncingId(device.id);
@@ -73,7 +112,12 @@ export default function DevicesPage() {
         setSyncLog(`❌ Error: ${data.error || "Unknown error"}\n${data.detail || ""}`);
         toast({ title: "Sync failed", description: data.error, variant: "destructive" });
       } else {
-        setSyncLog(`✅ ${data.message}\n📊 Total records from device: ${data.total}\n🔄 Synced: ${data.synced} | Skipped (duplicates): ${data.skipped}`);
+        setSyncLog(
+          `✅ ${data.message}\n` +
+          `📊 Total records from device: ${data.total}\n` +
+          `🔄 Synced: ${data.synced}\n` +
+          `⏭️  Skipped (duplicates): ${data.skipped}`
+        );
         toast({ title: "Sync complete", description: data.message });
         qc.invalidateQueries({ queryKey: ["devices"] });
       }
@@ -129,16 +173,14 @@ export default function DevicesPage() {
         </div>
       </div>
 
-      {/* Network notice */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
-        <strong>⚠️ Network Requirement:</strong> Direct ZK sync requires the ZKTeco device to be reachable from this server over TCP port 4370. Both must be on the same network or the device must be port-forwarded to the internet.
-      </div>
-
-      {/* CSV enroll import info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-        <strong>📄 Bulk Enroll Import CSV Format:</strong>
-        <code className="block mt-1 text-xs bg-blue-100 p-2 rounded">employeeCode,enrollNumber<br/>EMP001,1<br/>EMP002,2</code>
-        <span className="text-xs mt-1 block">The enrollNumber must match the User ID programmed in the ZKTeco device.</span>
+      {/* Step-by-step guide */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
+        <strong>📋 Quick Setup Guide:</strong>
+        <ol className="list-decimal list-inside mt-2 space-y-1">
+          <li><strong>Step 1:</strong> Click <strong>"Import Users from Device"</strong> → imports all 93 employees from your ZKTeco machine automatically.</li>
+          <li><strong>Step 2:</strong> Click <strong>"Sync Now"</strong> → downloads all historical attendance records (29,000+) and stores them in the database.</li>
+          <li><strong>Step 3:</strong> Check the Attendance page to see all records.</li>
+        </ol>
       </div>
 
       {/* Devices table */}
@@ -172,7 +214,9 @@ export default function DevicesPage() {
                   <TableCell className="text-gray-500">{device.location || "-"}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={device.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-100 text-gray-500"}>
-                      {device.isActive ? <><Wifi className="h-3 w-3 mr-1 inline" />Active</> : <><WifiOff className="h-3 w-3 mr-1 inline" />Inactive</>}
+                      {device.isActive
+                        ? <><Wifi className="h-3 w-3 mr-1 inline" />Active</>
+                        : <><WifiOff className="h-3 w-3 mr-1 inline" />Inactive</>}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm">
@@ -180,12 +224,24 @@ export default function DevicesPage() {
                       <div>
                         <div className="text-gray-700">{new Date(device.lastSyncAt).toLocaleString()}</div>
                         {device.lastSyncCount != null && <div className="text-xs text-green-600">{device.lastSyncCount} records synced</div>}
-                        {device.lastSyncError && <div className="text-xs text-red-500 truncate max-w-xs" title={device.lastSyncError}>{device.lastSyncError}</div>}
+                        {device.lastSyncError && (
+                          <div className="text-xs text-red-500 truncate max-w-xs" title={device.lastSyncError}>{device.lastSyncError}</div>
+                        )}
                       </div>
                     ) : <span className="text-gray-400">Never synced</span>}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleImportUsers(device)}
+                        disabled={importingId === device.id}
+                        className="flex items-center gap-1 text-blue-600 border-blue-200 hover:bg-blue-50"
+                      >
+                        <Users className={`h-3.5 w-3.5 ${importingId === device.id ? "animate-pulse" : ""}`} />
+                        {importingId === device.id ? "Importing..." : "Import Users"}
+                      </Button>
                       <Button
                         size="sm"
                         onClick={() => handleSync(device)}
@@ -208,10 +264,10 @@ export default function DevicesPage() {
         </Table>
       </div>
 
-      {/* Sync log */}
+      {/* Sync/Import log */}
       {syncLog && (
         <div className="bg-gray-900 text-green-400 font-mono text-sm p-4 rounded-lg whitespace-pre-line">
-          <div className="text-gray-400 text-xs mb-2">Sync Result Log</div>
+          <div className="text-gray-400 text-xs mb-2">Operation Result</div>
           {syncLog}
         </div>
       )}
@@ -230,7 +286,7 @@ export default function DevicesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>IP Address</Label>
-                <Input placeholder="192.168.1.201" value={form.ip} onChange={e => setForm(f => ({ ...f, ip: e.target.value }))} />
+                <Input placeholder="139.135.57.165" value={form.ip} onChange={e => setForm(f => ({ ...f, ip: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Port</Label>

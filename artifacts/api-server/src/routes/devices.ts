@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db, devicesTable, employeesTable, attendanceTable, shiftsTable } from "@workspace/db";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -70,11 +70,12 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
   let rawResult = "";
   try {
     const { stdout } = await execFileAsync("python3", [scriptPath, device.ip, String(device.port)], {
-      timeout: 60000, // 60s timeout for large devices
+      timeout: 300000, // 5 min timeout for large devices
+      maxBuffer: 50 * 1024 * 1024, // 50 MB
     });
     rawResult = stdout;
   } catch (err: any) {
-    const errMsg = err.stdout || err.message || "Script execution failed";
+    const errMsg = err.stdout || err.stderr || err.message || "Script execution failed";
     await db.update(devicesTable).set({
       lastSyncAt: new Date(),
       lastSyncError: errMsg.slice(0, 500),
@@ -116,88 +117,139 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
   const shifts = await db.select().from(shiftsTable);
   const shiftMap = new Map(shifts.map(s => [s.id, s]));
 
-  let synced = 0;
-  let skipped = 0;
+  // ── Group records by employee+date, keep earliest check-in & latest check-out ──
+  type DayKey = string; // `${employeeId}:${dateStr}`
+  type DayAccum = { empId: number; shiftId: number | null; date: string; checkIn?: Date; checkOut?: Date };
+  const dayMap = new Map<DayKey, DayAccum>();
 
+  let skipped = 0;
   for (const rec of records) {
     if (!rec.timestamp) continue;
     const emp = enrollMap.get(rec.enrollNumber);
-    if (!emp) { skipped++; continue; } // no matching employee
+    if (!emp) { skipped++; continue; }
 
     const punchTime = new Date(rec.timestamp);
     if (isNaN(punchTime.getTime())) continue;
 
-    const dateStr = punchTime.toISOString().slice(0, 10);
-    const punch = rec.punch; // 0=check-in, 1=check-out (some devices use 255 for check-out)
-    const isCheckIn = punch === 0 || punch === 4; // 4 = break-in
-    const isCheckOut = punch === 1 || punch === 5 || punch === 255; // 5 = break-out
-
-    // Fetch existing record for this employee+date
-    const [existing] = await db.select().from(attendanceTable)
-      .where(and(eq(attendanceTable.employeeId, emp.id), eq(attendanceTable.date, dateStr)));
-
-    if (isCheckIn) {
-      if (existing) {
-        // Already has a record — check if same check-in (within 10 min) to avoid dupe
-        if (existing.checkIn) {
-          const diff = Math.abs(existing.checkIn.getTime() - punchTime.getTime());
-          if (diff < 600000) { skipped++; continue; } // within 10 min, skip
-        }
-        // Update check-in if it's earlier
-        if (!existing.checkIn || punchTime < existing.checkIn) {
-          await db.update(attendanceTable).set({ checkIn: punchTime, source: "biometric" })
-            .where(and(eq(attendanceTable.employeeId, emp.id), eq(attendanceTable.date, dateStr)));
-        }
-        synced++;
-      } else {
-        // New record
-        let isLate = false;
-        if (emp.shiftId) {
-          const shift = shiftMap.get(emp.shiftId);
-          if (shift) {
-            const [sh, sm] = shift.startTime.split(":").map(Number);
-            const shiftStart = new Date(punchTime);
-            shiftStart.setHours(sh, sm + shift.gracePeriodMinutes, 0, 0);
-            isLate = punchTime > shiftStart;
-          }
-        }
-        await db.insert(attendanceTable).values({
-          employeeId: emp.id,
-          date: dateStr,
-          checkIn: punchTime,
-          status: isLate ? "late" : "present",
-          isLate,
-          source: "biometric",
-        });
-        synced++;
-      }
-    } else if (isCheckOut) {
-      if (existing && existing.checkIn) {
-        // Skip if check-out already set to same time
-        if (existing.checkOut) {
-          const diff = Math.abs(existing.checkOut.getTime() - punchTime.getTime());
-          if (diff < 600000) { skipped++; continue; }
-        }
-        // Update check-out if it's later
-        if (!existing.checkOut || punchTime > existing.checkOut) {
-          const workingHours = Math.round((punchTime.getTime() - existing.checkIn.getTime()) / 36000) / 100;
-          let isEarlyOut = false;
-          if (emp.shiftId) {
-            const shift = shiftMap.get(emp.shiftId);
-            if (shift) {
-              const [eh, em] = shift.endTime.split(":").map(Number);
-              const shiftEnd = new Date(punchTime);
-              shiftEnd.setHours(eh, em, 0, 0);
-              isEarlyOut = punchTime < shiftEnd;
-            }
-          }
-          await db.update(attendanceTable)
-            .set({ checkOut: punchTime, workingHours, isEarlyOut, source: "biometric" })
-            .where(and(eq(attendanceTable.employeeId, emp.id), eq(attendanceTable.date, dateStr)));
-          synced++;
-        }
+    // For overnight shifts: if punch hour < 12 (morning side of a night shift),
+    // the "work date" is the previous calendar day
+    const punchHour = punchTime.getHours();
+    let workDate = new Date(punchTime);
+    if (punchHour < 12 && emp.shiftId) {
+      const shift = shiftMap.get(emp.shiftId);
+      // If shift starts in afternoon (>=12) and punch is before noon → previous day
+      if (shift) {
+        const [sh] = shift.startTime.split(":").map(Number);
+        if (sh >= 12) workDate.setDate(workDate.getDate() - 1);
       }
     }
+    const dateStr = workDate.toISOString().slice(0, 10);
+
+    const isCheckIn = rec.punch === 0 || rec.punch === 4;
+    const isCheckOut = rec.punch === 1 || rec.punch === 5 || rec.punch === 255;
+    if (!isCheckIn && !isCheckOut) continue;
+
+    const key: DayKey = `${emp.id}:${dateStr}`;
+    const existing = dayMap.get(key) ?? { empId: emp.id, shiftId: emp.shiftId, date: dateStr };
+
+    if (isCheckIn) {
+      if (!existing.checkIn || punchTime < existing.checkIn) existing.checkIn = punchTime;
+    } else {
+      if (!existing.checkOut || punchTime > existing.checkOut) existing.checkOut = punchTime;
+    }
+    dayMap.set(key, existing);
+  }
+
+  // ── Load existing attendance records in bulk ──
+  const allEmpIds = [...new Set([...dayMap.values()].map(d => d.empId))];
+  const allDates  = [...new Set([...dayMap.values()].map(d => d.date))];
+
+  const existingRows = allEmpIds.length && allDates.length
+    ? await db.select().from(attendanceTable)
+        .where(and(
+          inArray(attendanceTable.employeeId, allEmpIds),
+          inArray(attendanceTable.date, allDates),
+        ))
+    : [];
+
+  // key → existing row
+  const existingMap = new Map(existingRows.map(r => [`${r.employeeId}:${r.date}`, r]));
+
+  // ── Upsert in batches of 100 ──
+  let synced = 0;
+  const toInsert: Parameters<typeof db.insert>[0] extends infer T ? any[] : any[] = [];
+
+  for (const [key, day] of dayMap) {
+    const existing = existingMap.get(key);
+    const shift = day.shiftId ? shiftMap.get(day.shiftId) : undefined;
+
+    function calcLate(checkIn: Date): boolean {
+      if (!shift) return false;
+      const [sh, sm] = shift.startTime.split(":").map(Number);
+      const cutoff = new Date(checkIn);
+      cutoff.setHours(sh, sm + shift.gracePeriodMinutes, 0, 0);
+      return checkIn > cutoff;
+    }
+    function calcEarlyOut(checkOut: Date): boolean {
+      if (!shift) return false;
+      const [eh, em] = shift.endTime.split(":").map(Number);
+      const cutoff = new Date(checkOut);
+      cutoff.setHours(eh, em, 0, 0);
+      return checkOut < cutoff;
+    }
+
+    if (!existing) {
+      if (!day.checkIn) continue; // no check-in at all, skip
+      const isLate = calcLate(day.checkIn);
+      let workingHours: number | undefined;
+      let isEarlyOut = false;
+      if (day.checkOut) {
+        workingHours = Math.round((day.checkOut.getTime() - day.checkIn.getTime()) / 36000) / 100;
+        isEarlyOut = calcEarlyOut(day.checkOut);
+      }
+      toInsert.push({
+        employeeId: day.empId,
+        date: day.date,
+        checkIn: day.checkIn,
+        checkOut: day.checkOut ?? null,
+        workingHours: workingHours ?? null,
+        status: isLate ? "late" : "present",
+        isLate,
+        isEarlyOut,
+        source: "biometric",
+      });
+      synced++;
+    } else {
+      // Update only if we have a better (earlier check-in / later check-out)
+      const updates: Record<string, unknown> = {};
+      if (day.checkIn && (!existing.checkIn || day.checkIn < existing.checkIn)) {
+        updates.checkIn = day.checkIn;
+        const isLate = calcLate(day.checkIn);
+        updates.isLate = isLate;
+        updates.status = isLate ? "late" : "present";
+      }
+      if (day.checkOut && (!existing.checkOut || day.checkOut > existing.checkOut)) {
+        const ci = (updates.checkIn as Date | undefined) ?? existing.checkIn;
+        if (ci) {
+          const workingHours = Math.round((day.checkOut.getTime() - ci.getTime()) / 36000) / 100;
+          updates.checkOut = day.checkOut;
+          updates.workingHours = workingHours;
+          updates.isEarlyOut = calcEarlyOut(day.checkOut);
+        }
+      }
+      if (Object.keys(updates).length) {
+        updates.source = "biometric";
+        await db.update(attendanceTable).set(updates)
+          .where(and(eq(attendanceTable.employeeId, day.empId), eq(attendanceTable.date, day.date)));
+        synced++;
+      }
+    }
+  }
+
+  // Batch-insert new rows in chunks of 200
+  const CHUNK = 200;
+  for (let i = 0; i < toInsert.length; i += CHUNK) {
+    await db.insert(attendanceTable).values(toInsert.slice(i, i + CHUNK));
   }
 
   // Update device sync metadata
@@ -213,6 +265,91 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
     synced,
     skipped,
     message: `Synced ${synced} records, skipped ${skipped} duplicates`,
+  });
+});
+
+// ─── Import Users from ZKTeco Device ────────────────────────────────────────
+// Fetches all users from the device and imports them as employees (enrollNumber mapped automatically)
+
+router.post("/devices/:id/import-users", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+
+  const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, id));
+  if (!device) { res.status(404).json({ error: "Device not found" }); return; }
+
+  const scriptPath = path.resolve(process.cwd(), "zk_sync.py");
+  let rawResult = "";
+  try {
+    const { stdout } = await execFileAsync("python3", [scriptPath, device.ip, String(device.port), "--users"], {
+      timeout: 30000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    rawResult = stdout;
+  } catch (err: any) {
+    res.status(500).json({ error: "ZK connection failed", detail: (err.stdout || err.message || "").slice(0, 500) });
+    return;
+  }
+
+  let parsed: any;
+  try { parsed = JSON.parse(rawResult); } catch {
+    res.status(500).json({ error: "Invalid JSON from script", raw: rawResult.slice(0, 200) });
+    return;
+  }
+  if (parsed.error) { res.status(500).json({ error: parsed.error }); return; }
+
+  const users: Array<{ userId: string; name: string; privilege: number; password: string }> = parsed.users ?? [];
+
+  // Load existing employees to check enroll numbers already assigned
+  const existingEmps = await db.select({ id: employeesTable.id, enrollNumber: employeesTable.enrollNumber, employeeCode: employeesTable.employeeCode })
+    .from(employeesTable);
+  const byEnroll = new Map(existingEmps.filter(e => e.enrollNumber).map(e => [e.enrollNumber!, e]));
+
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+  const skippedList: string[] = [];
+
+  for (const user of users) {
+    const enrollNum = user.userId;
+    if (byEnroll.has(enrollNum)) {
+      skipped++;
+      skippedList.push(`${enrollNum}: ${user.name || "(no name)"} — already mapped`);
+      continue;
+    }
+
+    // Parse name into first/last
+    const nameParts = (user.name || "").trim().split(/\s+/);
+    const firstName = nameParts[0] || `User${enrollNum}`;
+    const lastName = nameParts.slice(1).join(" ") || "Unknown";
+
+    // Generate unique employee code
+    const empCode = `ZK${enrollNum.padStart(4, "0")}`;
+
+    // Check if employee code already exists (update enroll number if so)
+    const [existByCode] = await db.select().from(employeesTable).where(eq(employeesTable.employeeCode, empCode));
+    if (existByCode) {
+      await db.update(employeesTable).set({ enrollNumber: enrollNum }).where(eq(employeesTable.id, existByCode.id));
+      updated++;
+    } else {
+      await db.insert(employeesTable).values({
+        employeeCode: empCode,
+        firstName,
+        lastName,
+        enrollNumber: enrollNum,
+        status: "active",
+      });
+      created++;
+    }
+  }
+
+  res.json({
+    success: true,
+    total: users.length,
+    created,
+    updated,
+    skipped,
+    message: `Created ${created} new employees, updated ${updated}, skipped ${skipped} already mapped`,
+    skippedList: skippedList.slice(0, 20),
   });
 });
 
