@@ -28,6 +28,7 @@ import type {
   Branch,
   BranchInput,
   BranchUpdate,
+  CompanySettings,
   DashboardStats,
   Department,
   DepartmentInput,
@@ -52,12 +53,14 @@ import type {
   ListEmployeesParams,
   ListLeavesParams,
   ListPayrollParams,
+  ListPunchLogsParams,
   ListUsersParams,
   LoginInput,
   Payroll,
   PayrollInput,
   PayrollSummary,
   PayrollUpdate,
+  PunchLog,
   Shift,
   ShiftInput,
   ShiftUpdate,
@@ -90,7 +93,6 @@ export const getHealthCheckUrl = () => {
 }
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const healthCheck = async ( options?: RequestInit): Promise<HealthStatus> => {
@@ -2387,6 +2389,238 @@ export const useDeleteAttendance = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteAttendanceMutationOptions(options));
+    }
+
+export const getListPunchLogsUrl = (params?: ListPunchLogsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/punch-logs?${stringifiedParams}` : `/api/punch-logs`
+}
+
+/**
+ * @summary List raw punch log events from ZKTeco devices
+ */
+export const listPunchLogs = async (params?: ListPunchLogsParams, options?: RequestInit): Promise<PunchLog[]> => {
+
+  return customFetch<PunchLog[]>(getListPunchLogsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPunchLogsQueryKey = (params?: ListPunchLogsParams,) => {
+    return [
+    `/api/punch-logs`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPunchLogsQueryOptions = <TData = Awaited<ReturnType<typeof listPunchLogs>>, TError = ErrorType<unknown>>(params?: ListPunchLogsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPunchLogs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPunchLogsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPunchLogs>>> = ({ signal }) => listPunchLogs(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPunchLogs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPunchLogsQueryResult = NonNullable<Awaited<ReturnType<typeof listPunchLogs>>>
+export type ListPunchLogsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List raw punch log events from ZKTeco devices
+ */
+
+export function useListPunchLogs<TData = Awaited<ReturnType<typeof listPunchLogs>>, TError = ErrorType<unknown>>(
+ params?: ListPunchLogsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPunchLogs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPunchLogsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetCompanySettingsUrl = () => {
+
+
+
+
+  return `/api/company-settings`
+}
+
+/**
+ * @summary Get all company settings
+ */
+export const getCompanySettings = async ( options?: RequestInit): Promise<CompanySettings> => {
+
+  return customFetch<CompanySettings>(getGetCompanySettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCompanySettingsQueryKey = () => {
+    return [
+    `/api/company-settings`
+    ] as const;
+    }
+
+
+export const getGetCompanySettingsQueryOptions = <TData = Awaited<ReturnType<typeof getCompanySettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanySettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCompanySettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCompanySettings>>> = ({ signal }) => getCompanySettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanySettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCompanySettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getCompanySettings>>>
+export type GetCompanySettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get all company settings
+ */
+
+export function useGetCompanySettings<TData = Awaited<ReturnType<typeof getCompanySettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanySettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCompanySettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateCompanySettingsUrl = () => {
+
+
+
+
+  return `/api/company-settings`
+}
+
+/**
+ * @summary Update company settings
+ */
+export const updateCompanySettings = async (companySettings: CompanySettings, options?: RequestInit): Promise<CompanySettings> => {
+
+  return customFetch<CompanySettings>(getUpdateCompanySettingsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      companySettings,)
+  }
+);}
+
+
+
+
+export const getUpdateCompanySettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCompanySettings>>, TError,{data: BodyType<CompanySettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCompanySettings>>, TError,{data: BodyType<CompanySettings>}, TContext> => {
+
+const mutationKey = ['updateCompanySettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCompanySettings>>, {data: BodyType<CompanySettings>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateCompanySettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCompanySettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateCompanySettings>>>
+    export type UpdateCompanySettingsMutationBody = BodyType<CompanySettings>
+    export type UpdateCompanySettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update company settings
+ */
+export const useUpdateCompanySettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCompanySettings>>, TError,{data: BodyType<CompanySettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCompanySettings>>,
+        TError,
+        {data: BodyType<CompanySettings>},
+        TContext
+      > => {
+      return useMutation(getUpdateCompanySettingsMutationOptions(options));
     }
 
 export const getListLeaveTypesUrl = () => {

@@ -14,5 +14,7 @@ export interface User {
   isActive?: boolean;
   /** @nullable */
   employeeId?: number | null;
+  /** @nullable */
+  tempPassword?: string | null;
   createdAt: string;
 }

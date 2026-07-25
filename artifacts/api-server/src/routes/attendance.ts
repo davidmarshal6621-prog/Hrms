@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
-import { db, attendanceTable, employeesTable, shiftsTable } from "@workspace/db";
+import { eq, and, gte, lte } from "drizzle-orm";
+import { db, attendanceTable, employeesTable, shiftsTable, usersTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -13,7 +13,13 @@ function fmtAtt(a: typeof attendanceTable.$inferSelect, empName?: string | null,
     checkOut: a.checkOut ? a.checkOut.toISOString() : null,
     workingHours: a.workingHours, status: a.status,
     isLate: a.isLate, isEarlyOut: a.isEarlyOut, source: a.source,
-    notes: a.notes, createdAt: a.createdAt.toISOString(),
+    notes: a.notes,
+    checkInDeviceId: a.checkInDeviceId, checkInDeviceName: a.checkInDeviceName,
+    checkOutDeviceId: a.checkOutDeviceId, checkOutDeviceName: a.checkOutDeviceName,
+    checkInVerifyType: a.checkInVerifyType, checkOutVerifyType: a.checkOutVerifyType,
+    isManuallyEdited: a.isManuallyEdited, correctionNote: a.correctionNote,
+    correctedBy: a.correctedBy, correctedAt: a.correctedAt ? a.correctedAt.toISOString() : null,
+    createdAt: a.createdAt.toISOString(),
   };
 }
 
@@ -31,10 +37,9 @@ router.get("/attendance/summary", async (req, res): Promise<void> => {
   const endDay = new Date(y, m, 0).getDate();
   const endDate = `${y}-${String(m).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
 
-  let query = db.select().from(attendanceTable)
+  let records = await db.select().from(attendanceTable)
     .where(and(gte(attendanceTable.date, startDate), lte(attendanceTable.date, endDate)));
 
-  const records = await query;
   const filtered = employeeId ? records.filter(r => r.employeeId === parseInt(employeeId, 10)) : records;
 
   const totalDays = endDay;
@@ -42,8 +47,9 @@ router.get("/attendance/summary", async (req, res): Promise<void> => {
   const absentDays = filtered.filter(r => r.status === "absent").length;
   const lateDays = filtered.filter(r => r.isLate).length;
   const leaveDays = filtered.filter(r => r.status === "on-leave").length;
-  const avgHours = filtered.length > 0
-    ? filtered.reduce((sum, r) => sum + (r.workingHours ?? 0), 0) / filtered.filter(r => r.workingHours).length || 0
+  const withHours = filtered.filter(r => r.workingHours);
+  const avgHours = withHours.length > 0
+    ? withHours.reduce((sum, r) => sum + (r.workingHours ?? 0), 0) / withHours.length
     : 0;
 
   res.json({
@@ -57,7 +63,10 @@ router.get("/attendance/today", async (_req, res): Promise<void> => {
   const today = new Date().toISOString().slice(0, 10);
   const records = await db.select().from(attendanceTable).where(eq(attendanceTable.date, today));
 
-  const employees = await db.select({ id: employeesTable.id, firstName: employeesTable.firstName, lastName: employeesTable.lastName, employeeCode: employeesTable.employeeCode }).from(employeesTable);
+  const employees = await db.select({
+    id: employeesTable.id, firstName: employeesTable.firstName,
+    lastName: employeesTable.lastName, employeeCode: employeesTable.employeeCode,
+  }).from(employeesTable);
   const empMap = new Map(employees.map(e => [e.id, { name: `${e.firstName} ${e.lastName}`, code: e.employeeCode }]));
 
   res.json(records.map(r => {
@@ -67,26 +76,28 @@ router.get("/attendance/today", async (_req, res): Promise<void> => {
 });
 
 router.post("/attendance/web-punch", async (req, res): Promise<void> => {
-  // For simplicity, we'll just create/update an attendance record using employeeId from body
   const { punchType, employeeId } = req.body;
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
+  const empId = employeeId || 1;
 
   const [existing] = await db.select().from(attendanceTable)
-    .where(and(eq(attendanceTable.employeeId, employeeId || 1), eq(attendanceTable.date, today)));
+    .where(and(eq(attendanceTable.employeeId, empId), eq(attendanceTable.date, today)));
 
   let record;
   if (!existing) {
     [record] = await db.insert(attendanceTable).values({
-      employeeId: employeeId || 1,
-      date: today,
+      employeeId: empId, date: today,
       checkIn: punchType === "in" ? now : undefined,
-      status: "present",
-      source: "web",
+      status: "present", source: "web",
+      checkInVerifyType: "web",
     }).returning();
   } else {
     [record] = await db.update(attendanceTable)
-      .set({ checkOut: punchType === "out" ? now : undefined })
+      .set({
+        checkOut: punchType === "out" ? now : undefined,
+        checkOutVerifyType: punchType === "out" ? "web" : undefined,
+      })
       .where(eq(attendanceTable.id, existing.id))
       .returning();
   }
@@ -95,62 +106,49 @@ router.post("/attendance/web-punch", async (req, res): Promise<void> => {
 });
 
 router.post("/attendance/zkteco", async (req, res): Promise<void> => {
-  // ZKTeco ADMS push protocol handler
-  // Device pushes data as: { sn, table, templateDataList }
-  const { sn, table: tableName, Stamp, templateDataList } = req.body;
+  const { sn, table: tableName, templateDataList } = req.body;
 
   if (tableName === "ATTLOG" && templateDataList) {
-    // Parse attendance log lines: EnrollNumber\tDateTime\tVerifyType\tInOutStatus
     const lines = templateDataList.split("\n").filter(Boolean);
     for (const line of lines) {
       const parts = line.split("\t");
       if (parts.length < 2) continue;
 
       const enrollNumber = parts[0];
-      const dateTimeStr = parts[1]; // Format: "2024-01-15 09:05:00"
+      const dateTimeStr = parts[1];
+      const verifyCode = parts[2] ? parseInt(parts[2], 10) : 1;
+      const inOutCode = parts[3] ? parseInt(parts[3], 10) : 0;
       const punchTime = new Date(dateTimeStr);
-
       if (isNaN(punchTime.getTime())) continue;
 
+      const verifyType = getVerifyTypeName(verifyCode);
       const dateStr = punchTime.toISOString().slice(0, 10);
 
-      // Find employee by enroll number
       const [emp] = await db.select().from(employeesTable)
         .where(eq(employeesTable.enrollNumber, enrollNumber));
-
       if (!emp) continue;
 
-      // Check if there's an existing record today
       const [existing] = await db.select().from(attendanceTable)
         .where(and(eq(attendanceTable.employeeId, emp.id), eq(attendanceTable.date, dateStr)));
 
       if (!existing) {
-        // First punch = check-in
-        // Check shift for late detection
         let isLate = false;
         if (emp.shiftId) {
           const [shift] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, emp.shiftId));
           if (shift) {
             const [sh, sm] = shift.startTime.split(":").map(Number);
-            const graceMinutes = shift.gracePeriodMinutes;
-            const shiftStart = new Date(punchTime);
-            shiftStart.setHours(sh, sm + graceMinutes, 0, 0);
-            isLate = punchTime > shiftStart;
+            const cutoff = new Date(punchTime);
+            cutoff.setHours(sh, sm + shift.gracePeriodMinutes, 0, 0);
+            isLate = punchTime > cutoff;
           }
         }
-
         await db.insert(attendanceTable).values({
-          employeeId: emp.id,
-          date: dateStr,
-          checkIn: punchTime,
-          status: isLate ? "late" : "present",
-          isLate,
-          source: "biometric",
+          employeeId: emp.id, date: dateStr, checkIn: punchTime,
+          status: isLate ? "late" : "present", isLate, source: "biometric",
+          checkInVerifyType: verifyType,
         });
       } else if (existing.checkIn && !existing.checkOut) {
-        // Second punch = check-out
         const workingHours = calcWorkingHours(existing.checkIn, punchTime);
-
         let isEarlyOut = false;
         if (emp.shiftId) {
           const [shift] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, emp.shiftId));
@@ -161,14 +159,12 @@ router.post("/attendance/zkteco", async (req, res): Promise<void> => {
             isEarlyOut = punchTime < shiftEnd;
           }
         }
-
         await db.update(attendanceTable)
-          .set({ checkOut: punchTime, workingHours, isEarlyOut })
+          .set({ checkOut: punchTime, workingHours, isEarlyOut, checkOutVerifyType: verifyType })
           .where(eq(attendanceTable.id, existing.id));
       }
     }
   }
-
   res.json({ success: true });
 });
 
@@ -185,7 +181,10 @@ router.get("/attendance", async (req, res): Promise<void> => {
   if (endDate) records = records.filter(r => r.date <= endDate);
   if (status) records = records.filter(r => r.status === status);
 
-  const employees = await db.select({ id: employeesTable.id, firstName: employeesTable.firstName, lastName: employeesTable.lastName, employeeCode: employeesTable.employeeCode }).from(employeesTable);
+  const employees = await db.select({
+    id: employeesTable.id, firstName: employeesTable.firstName,
+    lastName: employeesTable.lastName, employeeCode: employeesTable.employeeCode,
+  }).from(employeesTable);
   const empMap = new Map(employees.map(e => [e.id, { name: `${e.firstName} ${e.lastName}`, code: e.employeeCode }]));
 
   res.json(records.map(r => {
@@ -208,6 +207,8 @@ router.post("/attendance", async (req, res): Promise<void> => {
   const [record] = await db.insert(attendanceTable).values({
     employeeId, date, checkIn: checkInDate, checkOut: checkOutDate,
     workingHours, status: status ?? "present", source: "manual", notes,
+    isManuallyEdited: true,
+    correctionNote: notes ?? "Manually created",
   }).returning();
 
   res.status(201).json(fmtAtt(record));
@@ -217,7 +218,7 @@ router.patch("/attendance/:id", async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
 
-  const { checkIn, checkOut, status, notes } = req.body;
+  const { checkIn, checkOut, status, notes, correctionNote, correctedBy } = req.body;
   const updates: Record<string, unknown> = {};
   if (checkIn !== undefined) updates.checkIn = new Date(checkIn);
   if (checkOut !== undefined) updates.checkOut = new Date(checkOut);
@@ -227,6 +228,12 @@ router.patch("/attendance/:id", async (req, res): Promise<void> => {
   if (updates.checkIn && updates.checkOut) {
     updates.workingHours = calcWorkingHours(updates.checkIn as Date, updates.checkOut as Date);
   }
+
+  // Mark as manually edited
+  updates.isManuallyEdited = true;
+  updates.correctionNote = correctionNote ?? notes ?? "Manually corrected";
+  updates.correctedBy = correctedBy ?? "Admin/HR";
+  updates.correctedAt = new Date();
 
   const [record] = await db.update(attendanceTable).set(updates).where(eq(attendanceTable.id, id)).returning();
   if (!record) { res.status(404).json({ error: "Attendance record not found" }); return; }
@@ -239,5 +246,15 @@ router.delete("/attendance/:id", async (req, res): Promise<void> => {
   await db.delete(attendanceTable).where(eq(attendanceTable.id, id));
   res.sendStatus(204);
 });
+
+export function getVerifyTypeName(v: number): string {
+  const map: Record<number, string> = { 0: "password", 1: "fingerprint", 2: "card", 4: "face", 15: "other" };
+  return map[v] ?? "unknown";
+}
+
+export function getPunchDirection(p: number): string {
+  const map: Record<number, string> = { 0: "in", 1: "out", 4: "break-out", 5: "break-in", 255: "out" };
+  return map[p] ?? "other";
+}
 
 export default router;

@@ -24,4 +24,10 @@ export interface EmployeeInput {
   basicSalary?: number;
   allowances?: number;
   enrollNumber?: string;
+  address?: string;
+  fatherName?: string;
+  emergencyContact?: string;
+  bloodGroup?: string;
+  dateOfBirth?: string;
+  gender?: string;
 }

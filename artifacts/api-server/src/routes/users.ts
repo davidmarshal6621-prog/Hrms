@@ -5,35 +5,31 @@ import bcrypt from "bcryptjs";
 
 const router: IRouter = Router();
 
+function fmtUser(u: typeof usersTable.$inferSelect, includeTemp = false) {
+  return {
+    id: u.id, email: u.email, name: u.name, role: u.role,
+    isActive: u.isActive, employeeId: u.employeeId,
+    // Only include tempPassword for admin/super_admin (caller decides via includeTemp)
+    ...(includeTemp && u.tempPassword ? { tempPassword: u.tempPassword } : {}),
+    createdAt: u.createdAt.toISOString(),
+  };
+}
+
 router.get("/users", async (req, res): Promise<void> => {
   const { role, search } = req.query as { role?: string; search?: string };
 
   let query = db.select().from(usersTable);
-  const conditions = [];
+  let users = await query;
 
-  if (role) conditions.push(eq(usersTable.role, role));
+  if (role) users = users.filter(u => u.role === role);
   if (search) {
-    conditions.push(
-      or(
-        ilike(usersTable.name, `%${search}%`),
-        ilike(usersTable.email, `%${search}%`)
-      )
+    const s = search.toLowerCase();
+    users = users.filter(u =>
+      u.name.toLowerCase().includes(s) || u.email.toLowerCase().includes(s)
     );
   }
 
-  const users = conditions.length > 0
-    ? await query.where(conditions.length === 1 ? conditions[0] : conditions[0])
-    : await query;
-
-  res.json(users.map(u => ({
-    id: u.id,
-    email: u.email,
-    name: u.name,
-    role: u.role,
-    isActive: u.isActive,
-    employeeId: u.employeeId,
-    createdAt: u.createdAt.toISOString(),
-  })));
+  res.json(users.map(u => fmtUser(u, true)));
 });
 
 router.post("/users", async (req, res): Promise<void> => {
@@ -45,15 +41,13 @@ router.post("/users", async (req, res): Promise<void> => {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const [user] = await db.insert(usersTable).values({
-    email, passwordHash, name, role,
+    email, passwordHash,
+    tempPassword: password, // store plain text for admin view
+    name, role,
     employeeId: employeeId ?? null,
   }).returning();
 
-  res.status(201).json({
-    id: user.id, email: user.email, name: user.name, role: user.role,
-    isActive: user.isActive, employeeId: user.employeeId,
-    createdAt: user.createdAt.toISOString(),
-  });
+  res.status(201).json(fmtUser(user, true));
 });
 
 router.get("/users/:id", async (req, res): Promise<void> => {
@@ -61,16 +55,9 @@ router.get("/users/:id", async (req, res): Promise<void> => {
   const id = parseInt(raw, 10);
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
-  res.json({
-    id: user.id, email: user.email, name: user.name, role: user.role,
-    isActive: user.isActive, employeeId: user.employeeId,
-    createdAt: user.createdAt.toISOString(),
-  });
+  res.json(fmtUser(user, true));
 });
 
 router.patch("/users/:id", async (req, res): Promise<void> => {
@@ -84,25 +71,20 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
   if (role !== undefined) updates.role = role;
   if (isActive !== undefined) updates.isActive = isActive;
   if (employeeId !== undefined) updates.employeeId = employeeId;
-  if (password) updates.passwordHash = await bcrypt.hash(password, 10);
-
-  const [user] = await db.update(usersTable).set(updates).where(eq(usersTable.id, id)).returning();
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
+  if (password) {
+    updates.passwordHash = await bcrypt.hash(password, 10);
+    updates.tempPassword = password; // update temp password too
   }
 
-  res.json({
-    id: user.id, email: user.email, name: user.name, role: user.role,
-    isActive: user.isActive, employeeId: user.employeeId,
-    createdAt: user.createdAt.toISOString(),
-  });
+  const [user] = await db.update(usersTable).set(updates).where(eq(usersTable.id, id)).returning();
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+  res.json(fmtUser(user, true));
 });
 
 router.delete("/users/:id", async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
-
   await db.delete(usersTable).where(eq(usersTable.id, id));
   res.sendStatus(204);
 });

@@ -1,10 +1,12 @@
 import { Router, type IRouter } from "express";
 import { eq, and, inArray } from "drizzle-orm";
-import { db, devicesTable, employeesTable, attendanceTable, shiftsTable } from "@workspace/db";
+import { db, devicesTable, employeesTable, attendanceTable, shiftsTable, punchLogsTable, usersTable } from "@workspace/db";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import multer from "multer";
+import bcrypt from "bcryptjs";
+import { getVerifyTypeName, getPunchDirection } from "./attendance.js";
 
 const router: IRouter = Router();
 const execFileAsync = promisify(execFile);
@@ -20,7 +22,7 @@ function fmtDevice(d: typeof devicesTable.$inferSelect) {
   };
 }
 
-// ─── Device CRUD ────────────────────────────────────────────────────────────
+// ─── Device CRUD ─────────────────────────────────────────────────────────────
 
 router.get("/devices", async (_req, res): Promise<void> => {
   const devices = await db.select().from(devicesTable).orderBy(devicesTable.name);
@@ -30,9 +32,7 @@ router.get("/devices", async (_req, res): Promise<void> => {
 router.post("/devices", async (req, res): Promise<void> => {
   const { name, ip, port, location } = req.body;
   if (!name || !ip) { res.status(400).json({ error: "name and ip required" }); return; }
-  const [device] = await db.insert(devicesTable).values({
-    name, ip, port: port ?? 4370, location,
-  }).returning();
+  const [device] = await db.insert(devicesTable).values({ name, ip, port: port ?? 4370, location }).returning();
   res.status(201).json(fmtDevice(device));
 });
 
@@ -56,7 +56,7 @@ router.delete("/devices/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-// ─── ZKTeco Direct Sync ─────────────────────────────────────────────────────
+// ─── ZKTeco Direct Sync ───────────────────────────────────────────────────────
 
 router.post("/devices/:id/sync", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
@@ -64,65 +64,92 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
   const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, id));
   if (!device) { res.status(404).json({ error: "Device not found" }); return; }
 
-  // Path to the Python script (relative to where Node process runs: artifacts/api-server/)
   const scriptPath = path.resolve(process.cwd(), "zk_sync.py");
 
   let rawResult = "";
   try {
     const { stdout } = await execFileAsync("python3", [scriptPath, device.ip, String(device.port)], {
-      timeout: 300000, // 5 min timeout for large devices
-      maxBuffer: 50 * 1024 * 1024, // 50 MB
+      timeout: 300000,
+      maxBuffer: 50 * 1024 * 1024,
     });
     rawResult = stdout;
   } catch (err: any) {
     const errMsg = err.stdout || err.stderr || err.message || "Script execution failed";
-    await db.update(devicesTable).set({
-      lastSyncAt: new Date(),
-      lastSyncError: errMsg.slice(0, 500),
-    }).where(eq(devicesTable.id, id));
+    await db.update(devicesTable).set({ lastSyncAt: new Date(), lastSyncError: errMsg.slice(0, 500) })
+      .where(eq(devicesTable.id, id));
     res.status(500).json({ error: "ZK connection failed", detail: errMsg.slice(0, 500) });
     return;
   }
 
   let parsed: any;
-  try {
-    parsed = JSON.parse(rawResult);
-  } catch {
-    await db.update(devicesTable).set({ lastSyncAt: new Date(), lastSyncError: "Invalid JSON from script" }).where(eq(devicesTable.id, id));
+  try { parsed = JSON.parse(rawResult); } catch {
+    await db.update(devicesTable).set({ lastSyncAt: new Date(), lastSyncError: "Invalid JSON from script" })
+      .where(eq(devicesTable.id, id));
     res.status(500).json({ error: "Script returned invalid JSON", raw: rawResult.slice(0, 200) });
     return;
   }
-
   if (parsed.error) {
-    await db.update(devicesTable).set({ lastSyncAt: new Date(), lastSyncError: parsed.error }).where(eq(devicesTable.id, id));
+    await db.update(devicesTable).set({ lastSyncAt: new Date(), lastSyncError: parsed.error })
+      .where(eq(devicesTable.id, id));
     res.status(500).json({ error: parsed.error });
     return;
   }
 
-  // Process records
   const records: Array<{ enrollNumber: string; timestamp: string; punch: number; status: number }> = parsed.records ?? [];
 
-  // Load all employees with enroll numbers
-  const employees = await db.select({
-    id: employeesTable.id,
-    enrollNumber: employeesTable.enrollNumber,
-    shiftId: employeesTable.shiftId,
-  }).from(employeesTable);
+  // Load employees
+  const employees = await db.select({ id: employeesTable.id, enrollNumber: employeesTable.enrollNumber, shiftId: employeesTable.shiftId })
+    .from(employeesTable);
   const enrollMap = new Map<string, { id: number; shiftId: number | null }>();
   for (const emp of employees) {
     if (emp.enrollNumber) enrollMap.set(emp.enrollNumber, { id: emp.id, shiftId: emp.shiftId });
   }
 
-  // Load shifts
   const shifts = await db.select().from(shiftsTable);
   const shiftMap = new Map(shifts.map(s => [s.id, s]));
 
-  // ── Group records by employee+date, keep earliest check-in & latest check-out ──
-  type DayKey = string; // `${employeeId}:${dateStr}`
-  type DayAccum = { empId: number; shiftId: number | null; date: string; checkIn?: Date; checkOut?: Date };
-  const dayMap = new Map<DayKey, DayAccum>();
+  // ── Store all raw punches in punch_logs ──────────────────────────────────
+  const punchLogsToInsert: any[] = [];
+  for (const rec of records) {
+    if (!rec.timestamp) continue;
+    const punchTime = new Date(rec.timestamp);
+    if (isNaN(punchTime.getTime())) continue;
+    const emp = enrollMap.get(rec.enrollNumber);
+    punchLogsToInsert.push({
+      employeeId: emp?.id ?? null,
+      enrollNumber: rec.enrollNumber,
+      deviceId: device.id,
+      deviceName: device.name,
+      punchTime,
+      verifyType: getVerifyTypeName(rec.status),  // status field = verify type from device
+      punchDirection: getPunchDirection(rec.punch),
+      rawPunch: rec.punch,
+      rawVerify: rec.status,
+    });
+  }
 
+  // Batch insert punch logs (ignore duplicates via upsert-style chunks)
+  const CHUNK = 500;
+  let punchLogsInserted = 0;
+  for (let i = 0; i < punchLogsToInsert.length; i += CHUNK) {
+    try {
+      await db.insert(punchLogsTable).values(punchLogsToInsert.slice(i, i + CHUNK))
+        .onConflictDoNothing();
+      punchLogsInserted += Math.min(CHUNK, punchLogsToInsert.length - i);
+    } catch { /* ignore dup errors */ }
+  }
+
+  // ── Group records by employee+date, keep earliest check-in & latest check-out ──
+  type DayKey = string;
+  type DayAccum = {
+    empId: number; shiftId: number | null; date: string;
+    checkIn?: Date; checkOut?: Date;
+    checkInDeviceId?: number; checkInDeviceName?: string; checkInVerifyType?: string;
+    checkOutDeviceId?: number; checkOutDeviceName?: string; checkOutVerifyType?: string;
+  };
+  const dayMap = new Map<DayKey, DayAccum>();
   let skipped = 0;
+
   for (const rec of records) {
     if (!rec.timestamp) continue;
     const emp = enrollMap.get(rec.enrollNumber);
@@ -131,13 +158,10 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
     const punchTime = new Date(rec.timestamp);
     if (isNaN(punchTime.getTime())) continue;
 
-    // For overnight shifts: if punch hour < 12 (morning side of a night shift),
-    // the "work date" is the previous calendar day
     const punchHour = punchTime.getHours();
     let workDate = new Date(punchTime);
     if (punchHour < 12 && emp.shiftId) {
       const shift = shiftMap.get(emp.shiftId);
-      // If shift starts in afternoon (>=12) and punch is before noon → previous day
       if (shift) {
         const [sh] = shift.startTime.split(":").map(Number);
         if (sh >= 12) workDate.setDate(workDate.getDate() - 1);
@@ -151,36 +175,41 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
 
     const key: DayKey = `${emp.id}:${dateStr}`;
     const existing = dayMap.get(key) ?? { empId: emp.id, shiftId: emp.shiftId, date: dateStr };
+    const verifyType = getVerifyTypeName(rec.status);
 
     if (isCheckIn) {
-      if (!existing.checkIn || punchTime < existing.checkIn) existing.checkIn = punchTime;
+      if (!existing.checkIn || punchTime < existing.checkIn) {
+        existing.checkIn = punchTime;
+        existing.checkInDeviceId = device.id;
+        existing.checkInDeviceName = device.name;
+        existing.checkInVerifyType = verifyType;
+      }
     } else {
-      if (!existing.checkOut || punchTime > existing.checkOut) existing.checkOut = punchTime;
+      if (!existing.checkOut || punchTime > existing.checkOut) {
+        existing.checkOut = punchTime;
+        existing.checkOutDeviceId = device.id;
+        existing.checkOutDeviceName = device.name;
+        existing.checkOutVerifyType = verifyType;
+      }
     }
     dayMap.set(key, existing);
   }
 
-  // ── Load existing attendance records in bulk ──
+  // Bulk load existing attendance
   const allEmpIds = [...new Set([...dayMap.values()].map(d => d.empId))];
   const allDates  = [...new Set([...dayMap.values()].map(d => d.date))];
 
   const existingRows = allEmpIds.length && allDates.length
     ? await db.select().from(attendanceTable)
-        .where(and(
-          inArray(attendanceTable.employeeId, allEmpIds),
-          inArray(attendanceTable.date, allDates),
-        ))
+        .where(and(inArray(attendanceTable.employeeId, allEmpIds), inArray(attendanceTable.date, allDates)))
     : [];
-
-  // key → existing row
   const existingMap = new Map(existingRows.map(r => [`${r.employeeId}:${r.date}`, r]));
 
-  // ── Upsert in batches of 100 ──
   let synced = 0;
-  const toInsert: Parameters<typeof db.insert>[0] extends infer T ? any[] : any[] = [];
+  const toInsert: any[] = [];
 
-  for (const [key, day] of dayMap) {
-    const existing = existingMap.get(key);
+  for (const [, day] of dayMap) {
+    const existing = existingMap.get(`${day.empId}:${day.date}`);
     const shift = day.shiftId ? shiftMap.get(day.shiftId) : undefined;
 
     function calcLate(checkIn: Date): boolean {
@@ -199,7 +228,7 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
     }
 
     if (!existing) {
-      if (!day.checkIn) continue; // no check-in at all, skip
+      if (!day.checkIn) continue;
       const isLate = calcLate(day.checkIn);
       let workingHours: number | undefined;
       let isEarlyOut = false;
@@ -208,33 +237,36 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
         isEarlyOut = calcEarlyOut(day.checkOut);
       }
       toInsert.push({
-        employeeId: day.empId,
-        date: day.date,
-        checkIn: day.checkIn,
-        checkOut: day.checkOut ?? null,
+        employeeId: day.empId, date: day.date,
+        checkIn: day.checkIn, checkOut: day.checkOut ?? null,
         workingHours: workingHours ?? null,
-        status: isLate ? "late" : "present",
-        isLate,
-        isEarlyOut,
+        status: isLate ? "late" : "present", isLate, isEarlyOut,
         source: "biometric",
+        checkInDeviceId: day.checkInDeviceId, checkInDeviceName: day.checkInDeviceName,
+        checkInVerifyType: day.checkInVerifyType,
+        checkOutDeviceId: day.checkOutDeviceId, checkOutDeviceName: day.checkOutDeviceName,
+        checkOutVerifyType: day.checkOutVerifyType,
       });
       synced++;
     } else {
-      // Update only if we have a better (earlier check-in / later check-out)
       const updates: Record<string, unknown> = {};
       if (day.checkIn && (!existing.checkIn || day.checkIn < existing.checkIn)) {
         updates.checkIn = day.checkIn;
-        const isLate = calcLate(day.checkIn);
-        updates.isLate = isLate;
-        updates.status = isLate ? "late" : "present";
+        updates.isLate = calcLate(day.checkIn);
+        updates.status = updates.isLate ? "late" : "present";
+        updates.checkInDeviceId = day.checkInDeviceId;
+        updates.checkInDeviceName = day.checkInDeviceName;
+        updates.checkInVerifyType = day.checkInVerifyType;
       }
       if (day.checkOut && (!existing.checkOut || day.checkOut > existing.checkOut)) {
         const ci = (updates.checkIn as Date | undefined) ?? existing.checkIn;
         if (ci) {
-          const workingHours = Math.round((day.checkOut.getTime() - ci.getTime()) / 36000) / 100;
           updates.checkOut = day.checkOut;
-          updates.workingHours = workingHours;
+          updates.workingHours = Math.round((day.checkOut.getTime() - ci.getTime()) / 36000) / 100;
           updates.isEarlyOut = calcEarlyOut(day.checkOut);
+          updates.checkOutDeviceId = day.checkOutDeviceId;
+          updates.checkOutDeviceName = day.checkOutDeviceName;
+          updates.checkOutVerifyType = day.checkOutVerifyType;
         }
       }
       if (Object.keys(updates).length) {
@@ -246,30 +278,25 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
     }
   }
 
-  // Batch-insert new rows in chunks of 200
-  const CHUNK = 200;
-  for (let i = 0; i < toInsert.length; i += CHUNK) {
-    await db.insert(attendanceTable).values(toInsert.slice(i, i + CHUNK));
+  const CHUNK2 = 200;
+  for (let i = 0; i < toInsert.length; i += CHUNK2) {
+    await db.insert(attendanceTable).values(toInsert.slice(i, i + CHUNK2));
   }
 
-  // Update device sync metadata
   await db.update(devicesTable).set({
-    lastSyncAt: new Date(),
-    lastSyncCount: synced,
-    lastSyncError: null,
+    lastSyncAt: new Date(), lastSyncCount: synced, lastSyncError: null,
   }).where(eq(devicesTable.id, id));
 
   res.json({
     success: true,
     total: records.length,
-    synced,
-    skipped,
-    message: `Synced ${synced} records, skipped ${skipped} duplicates`,
+    punchLogsStored: punchLogsInserted,
+    synced, skipped,
+    message: `Synced ${synced} records, stored ${punchLogsInserted} punch logs`,
   });
 });
 
-// ─── Import Users from ZKTeco Device ────────────────────────────────────────
-// Fetches all users from the device and imports them as employees (enrollNumber mapped automatically)
+// ─── Import Users from ZKTeco Device + Auto-create User Accounts ─────────────
 
 router.post("/devices/:id/import-users", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
@@ -281,8 +308,7 @@ router.post("/devices/:id/import-users", async (req, res): Promise<void> => {
   let rawResult = "";
   try {
     const { stdout } = await execFileAsync("python3", [scriptPath, device.ip, String(device.port), "--users"], {
-      timeout: 30000,
-      maxBuffer: 10 * 1024 * 1024,
+      timeout: 30000, maxBuffer: 10 * 1024 * 1024,
     });
     rawResult = stdout;
   } catch (err: any) {
@@ -292,14 +318,13 @@ router.post("/devices/:id/import-users", async (req, res): Promise<void> => {
 
   let parsed: any;
   try { parsed = JSON.parse(rawResult); } catch {
-    res.status(500).json({ error: "Invalid JSON from script", raw: rawResult.slice(0, 200) });
+    res.status(500).json({ error: "Invalid JSON from script" });
     return;
   }
   if (parsed.error) { res.status(500).json({ error: parsed.error }); return; }
 
-  const users: Array<{ userId: string; name: string; privilege: number; password: string }> = parsed.users ?? [];
+  const users: Array<{ userId: string; name: string; privilege: number }> = parsed.users ?? [];
 
-  // Load existing employees to check enroll numbers already assigned
   const existingEmps = await db.select({ id: employeesTable.id, enrollNumber: employeesTable.enrollNumber, employeeCode: employeesTable.employeeCode })
     .from(employeesTable);
   const byEnroll = new Map(existingEmps.filter(e => e.enrollNumber).map(e => [e.enrollNumber!, e]));
@@ -307,85 +332,86 @@ router.post("/devices/:id/import-users", async (req, res): Promise<void> => {
   let created = 0;
   let updated = 0;
   let skipped = 0;
-  const skippedList: string[] = [];
+  let usersCreated = 0;
+  const createdUsers: Array<{ employeeCode: string; email: string; password: string }> = [];
 
   for (const user of users) {
     const enrollNum = user.userId;
-    if (byEnroll.has(enrollNum)) {
-      skipped++;
-      skippedList.push(`${enrollNum}: ${user.name || "(no name)"} — already mapped`);
-      continue;
-    }
+    if (byEnroll.has(enrollNum)) { skipped++; continue; }
 
-    // Parse name into first/last
     const nameParts = (user.name || "").trim().split(/\s+/);
     const firstName = nameParts[0] || `User${enrollNum}`;
     const lastName = nameParts.slice(1).join(" ") || "Unknown";
-
-    // Generate unique employee code
     const empCode = `ZK${enrollNum.padStart(4, "0")}`;
 
-    // Check if employee code already exists (update enroll number if so)
     const [existByCode] = await db.select().from(employeesTable).where(eq(employeesTable.employeeCode, empCode));
+    let empId: number;
+
     if (existByCode) {
       await db.update(employeesTable).set({ enrollNumber: enrollNum }).where(eq(employeesTable.id, existByCode.id));
+      empId = existByCode.id;
       updated++;
     } else {
-      await db.insert(employeesTable).values({
-        employeeCode: empCode,
-        firstName,
-        lastName,
-        enrollNumber: enrollNum,
-        status: "active",
-      });
+      const [newEmp] = await db.insert(employeesTable).values({
+        employeeCode: empCode, firstName, lastName, enrollNumber: enrollNum, status: "active",
+      }).returning();
+      empId = newEmp.id;
       created++;
+    }
+
+    // Auto-create user account for this employee
+    const email = `${empCode.toLowerCase()}@company.local`;
+    const password = `ZK${enrollNum}!Pass`;
+
+    const [existUser] = await db.select().from(usersTable).where(eq(usersTable.email, email));
+    if (!existUser) {
+      const passwordHash = await bcrypt.hash(password, 10);
+      await db.insert(usersTable).values({
+        email, passwordHash, tempPassword: password,
+        name: `${firstName} ${lastName}`,
+        role: "employee",
+        employeeId: empId,
+      });
+      usersCreated++;
+      createdUsers.push({ employeeCode: empCode, email, password });
     }
   }
 
   res.json({
-    success: true,
-    total: users.length,
-    created,
-    updated,
-    skipped,
-    message: `Created ${created} new employees, updated ${updated}, skipped ${skipped} already mapped`,
-    skippedList: skippedList.slice(0, 20),
+    success: true, total: users.length, created, updated, skipped, usersCreated,
+    message: `Created ${created} employees, ${usersCreated} user accounts`,
+    // Return first 10 so admin can see them
+    sampleCredentials: createdUsers.slice(0, 10),
   });
 });
 
-// ─── Test Device Connection ──────────────────────────────────────────────────
+// ─── Test Device Connection ───────────────────────────────────────────────────
 
 router.post("/devices/test-connection", async (req, res): Promise<void> => {
   const { ip, port } = req.body;
   if (!ip) { res.status(400).json({ error: "ip required" }); return; }
-
   const scriptPath = path.resolve(process.cwd(), "zk_sync.py");
   try {
     const { stdout } = await execFileAsync("python3", [scriptPath, ip, String(port ?? 4370)], {
-      timeout: 15000,
+      timeout: 20000,
     });
-    const parsed = JSON.parse(stdout);
-    if (parsed.error) {
-      res.status(400).json({ connected: false, error: parsed.error });
-    } else {
-      res.json({ connected: true, recordCount: parsed.count });
-    }
+    const p = JSON.parse(stdout);
+    if (p.error) { res.status(400).json({ connected: false, error: p.error }); }
+    else { res.json({ connected: true, recordCount: p.count }); }
   } catch (err: any) {
     res.status(400).json({ connected: false, error: err.message });
   }
 });
 
-// ─── CSV Enroll Number Bulk Import ──────────────────────────────────────────
+// ─── CSV Enroll Number Bulk Import ───────────────────────────────────────────
 
 router.post("/employees/import-enroll", upload.single("file"), async (req, res): Promise<void> => {
   if (!req.file) { res.status(400).json({ error: "CSV file required" }); return; }
 
   const content = req.file.buffer.toString("utf-8");
   const lines = content.split(/\r?\n/).filter(Boolean);
-
   if (lines.length < 2) { res.status(400).json({ error: "CSV must have header + at least one row" }); return; }
 
-  // Detect header — expect: employeeCode, enrollNumber
   const header = lines[0].split(",").map(h => h.trim().toLowerCase());
   const codeIdx = header.findIndex(h => h.includes("code") || h === "employeecode");
   const enrollIdx = header.findIndex(h => h.includes("enroll") || h.includes("userid") || h.includes("user_id"));
@@ -395,8 +421,7 @@ router.post("/employees/import-enroll", upload.single("file"), async (req, res):
     return;
   }
 
-  let updated = 0;
-  let notFound = 0;
+  let updated = 0; let notFound = 0;
   const errors: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
@@ -404,10 +429,8 @@ router.post("/employees/import-enroll", upload.single("file"), async (req, res):
     const code = cols[codeIdx];
     const enroll = cols[enrollIdx];
     if (!code || !enroll) continue;
-
     const [emp] = await db.select().from(employeesTable).where(eq(employeesTable.employeeCode, code));
     if (!emp) { notFound++; errors.push(`Row ${i + 1}: Employee '${code}' not found`); continue; }
-
     await db.update(employeesTable).set({ enrollNumber: enroll }).where(eq(employeesTable.id, emp.id));
     updated++;
   }

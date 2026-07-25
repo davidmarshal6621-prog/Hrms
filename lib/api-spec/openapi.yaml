@@ -9,27 +9,21 @@ servers:
     description: Base API path
 tags:
   - name: health
-    description: Health operations
   - name: auth
-    description: Authentication
   - name: users
-    description: User management
   - name: branches
-    description: Branch management
   - name: departments
-    description: Department management
   - name: employees
-    description: Employee management
   - name: attendance
-    description: Attendance management
   - name: leaves
-    description: Leave management
   - name: payroll
-    description: Payroll management
   - name: shifts
-    description: Shift management
   - name: dashboard
-    description: Dashboard aggregations
+  - name: devices
+  - name: punchLogs
+    description: Raw punch log events from ZKTeco devices
+  - name: companySettings
+    description: Company configuration
 
 paths:
   /healthz:
@@ -37,7 +31,6 @@ paths:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -619,6 +612,80 @@ paths:
         "204":
           description: Deleted
 
+  /punch-logs:
+    get:
+      operationId: listPunchLogs
+      tags: [punchLogs]
+      summary: List raw punch log events from ZKTeco devices
+      parameters:
+        - name: employeeId
+          in: query
+          schema:
+            type: integer
+        - name: date
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          schema:
+            type: string
+        - name: deviceId
+          in: query
+          schema:
+            type: integer
+        - name: enrollNumber
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of punch log events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PunchLog"
+
+  /company-settings:
+    get:
+      operationId: getCompanySettings
+      tags: [companySettings]
+      summary: Get all company settings
+      responses:
+        "200":
+          description: Company settings key-value map
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanySettings"
+    patch:
+      operationId: updateCompanySettings
+      tags: [companySettings]
+      summary: Update company settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanySettings"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanySettings"
+
   /leave-types:
     get:
       operationId: listLeaveTypes
@@ -1017,8 +1084,7 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
     LoginInput:
       type: object
@@ -1069,6 +1135,8 @@ components:
           type: boolean
         employeeId:
           type: ["integer", "null"]
+        tempPassword:
+          type: ["string", "null"]
         createdAt:
           type: string
 
@@ -1235,6 +1303,28 @@ components:
           type: ["string", "null"]
         status:
           type: string
+        address:
+          type: ["string", "null"]
+        fatherName:
+          type: ["string", "null"]
+        emergencyContact:
+          type: ["string", "null"]
+        bloodGroup:
+          type: ["string", "null"]
+        dateOfBirth:
+          type: ["string", "null"]
+        gender:
+          type: ["string", "null"]
+        religion:
+          type: ["string", "null"]
+        nationality:
+          type: ["string", "null"]
+        cvData:
+          type: ["object", "null"]
+        cvStatus:
+          type: ["string", "null"]
+        profilePhoto:
+          type: ["string", "null"]
         createdAt:
           type: string
 
@@ -1270,6 +1360,18 @@ components:
           type: number
         enrollNumber:
           type: string
+        address:
+          type: string
+        fatherName:
+          type: string
+        emergencyContact:
+          type: string
+        bloodGroup:
+          type: string
+        dateOfBirth:
+          type: string
+        gender:
+          type: string
 
     EmployeeUpdate:
       type: object
@@ -1301,6 +1403,28 @@ components:
         enrollNumber:
           type: string
         status:
+          type: string
+        address:
+          type: string
+        fatherName:
+          type: string
+        emergencyContact:
+          type: string
+        bloodGroup:
+          type: string
+        dateOfBirth:
+          type: string
+        gender:
+          type: string
+        religion:
+          type: string
+        nationality:
+          type: string
+        profilePhoto:
+          type: string
+        cvData:
+          type: object
+        cvStatus:
           type: string
 
     EmployeeStats:
@@ -1366,6 +1490,22 @@ components:
           type: string
         notes:
           type: ["string", "null"]
+        checkInDeviceName:
+          type: ["string", "null"]
+        checkOutDeviceName:
+          type: ["string", "null"]
+        checkInVerifyType:
+          type: ["string", "null"]
+        checkOutVerifyType:
+          type: ["string", "null"]
+        isManuallyEdited:
+          type: boolean
+        correctionNote:
+          type: ["string", "null"]
+        correctedBy:
+          type: ["string", "null"]
+        correctedAt:
+          type: ["string", "null"]
         createdAt:
           type: string
 
@@ -1396,6 +1536,10 @@ components:
         status:
           type: string
         notes:
+          type: string
+        correctionNote:
+          type: string
+        correctedBy:
           type: string
 
     AttendanceSummary:
@@ -1438,6 +1582,57 @@ components:
           type: ["string", "null"]
         templateDataList:
           type: ["string", "null"]
+
+    PunchLog:
+      type: object
+      required: [id, enrollNumber, punchTime, verifyType, punchDirection, createdAt]
+      properties:
+        id:
+          type: integer
+        employeeId:
+          type: ["integer", "null"]
+        employeeName:
+          type: ["string", "null"]
+        employeeCode:
+          type: ["string", "null"]
+        enrollNumber:
+          type: string
+        deviceId:
+          type: ["integer", "null"]
+        deviceName:
+          type: ["string", "null"]
+        punchTime:
+          type: string
+        verifyType:
+          type: string
+        punchDirection:
+          type: string
+        rawPunch:
+          type: ["integer", "null"]
+        rawVerify:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+
+    CompanySettings:
+      type: object
+      properties:
+        companyName:
+          type: string
+        companyLogo:
+          type: string
+        currency:
+          type: string
+        currencySymbol:
+          type: string
+        dateFormat:
+          type: string
+        salaryVisibility:
+          type: string
+        showSalaryToEmployee:
+          type: string
+        timezone:
+          type: string
 
     LeaveType:
       type: object

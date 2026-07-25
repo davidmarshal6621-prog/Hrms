@@ -36,6 +36,8 @@ export interface User {
   isActive?: boolean;
   /** @nullable */
   employeeId?: number | null;
+  /** @nullable */
+  tempPassword?: string | null;
   createdAt: string;
 }
 
@@ -118,6 +120,11 @@ export interface DepartmentUpdate {
   isActive?: boolean;
 }
 
+/**
+ * @nullable
+ */
+export type EmployeeCvData = { [key: string]: unknown } | null;
+
 export interface Employee {
   id: number;
   employeeCode: string;
@@ -152,6 +159,28 @@ export interface Employee {
   /** @nullable */
   enrollNumber?: string | null;
   status: string;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  fatherName?: string | null;
+  /** @nullable */
+  emergencyContact?: string | null;
+  /** @nullable */
+  bloodGroup?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  gender?: string | null;
+  /** @nullable */
+  religion?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  cvData?: EmployeeCvData;
+  /** @nullable */
+  cvStatus?: string | null;
+  /** @nullable */
+  profilePhoto?: string | null;
   createdAt: string;
 }
 
@@ -173,7 +202,15 @@ export interface EmployeeInput {
   basicSalary?: number;
   allowances?: number;
   enrollNumber?: string;
+  address?: string;
+  fatherName?: string;
+  emergencyContact?: string;
+  bloodGroup?: string;
+  dateOfBirth?: string;
+  gender?: string;
 }
+
+export type EmployeeUpdateCvData = { [key: string]: unknown };
 
 export interface EmployeeUpdate {
   firstName?: string;
@@ -193,6 +230,17 @@ export interface EmployeeUpdate {
   allowances?: number;
   enrollNumber?: string;
   status?: string;
+  address?: string;
+  fatherName?: string;
+  emergencyContact?: string;
+  bloodGroup?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  religion?: string;
+  nationality?: string;
+  profilePhoto?: string;
+  cvData?: EmployeeUpdateCvData;
+  cvStatus?: string;
 }
 
 export type EmployeeStatsByDepartmentItem = {
@@ -234,6 +282,21 @@ export interface Attendance {
   source?: string;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  checkInDeviceName?: string | null;
+  /** @nullable */
+  checkOutDeviceName?: string | null;
+  /** @nullable */
+  checkInVerifyType?: string | null;
+  /** @nullable */
+  checkOutVerifyType?: string | null;
+  isManuallyEdited?: boolean;
+  /** @nullable */
+  correctionNote?: string | null;
+  /** @nullable */
+  correctedBy?: string | null;
+  /** @nullable */
+  correctedAt?: string | null;
   createdAt: string;
 }
 
@@ -251,6 +314,8 @@ export interface AttendanceUpdate {
   checkOut?: string;
   status?: string;
   notes?: string;
+  correctionNote?: string;
+  correctedBy?: string;
 }
 
 export interface AttendanceSummary {
@@ -276,6 +341,40 @@ export interface ZktecoPayload {
   OpStamp?: string | null;
   /** @nullable */
   templateDataList?: string | null;
+}
+
+export interface PunchLog {
+  id: number;
+  /** @nullable */
+  employeeId?: number | null;
+  /** @nullable */
+  employeeName?: string | null;
+  /** @nullable */
+  employeeCode?: string | null;
+  enrollNumber: string;
+  /** @nullable */
+  deviceId?: number | null;
+  /** @nullable */
+  deviceName?: string | null;
+  punchTime: string;
+  verifyType: string;
+  punchDirection: string;
+  /** @nullable */
+  rawPunch?: number | null;
+  /** @nullable */
+  rawVerify?: number | null;
+  createdAt: string;
+}
+
+export interface CompanySettings {
+  companyName?: string;
+  companyLogo?: string;
+  currency?: string;
+  currencySymbol?: string;
+  dateFormat?: string;
+  salaryVisibility?: string;
+  showSalaryToEmployee?: string;
+  timezone?: string;
 }
 
 export interface LeaveType {
@@ -469,6 +568,16 @@ export type GetAttendanceSummaryParams = {
 month?: number;
 year?: number;
 employeeId?: number;
+};
+
+export type ListPunchLogsParams = {
+employeeId?: number;
+date?: string;
+startDate?: string;
+endDate?: string;
+deviceId?: number;
+enrollNumber?: string;
+limit?: number;
 };
 
 export type ListLeavesParams = {

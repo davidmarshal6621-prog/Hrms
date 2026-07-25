@@ -26,5 +26,20 @@ export interface Attendance {
   source?: string;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  checkInDeviceName?: string | null;
+  /** @nullable */
+  checkOutDeviceName?: string | null;
+  /** @nullable */
+  checkInVerifyType?: string | null;
+  /** @nullable */
+  checkOutVerifyType?: string | null;
+  isManuallyEdited?: boolean;
+  /** @nullable */
+  correctionNote?: string | null;
+  /** @nullable */
+  correctedBy?: string | null;
+  /** @nullable */
+  correctedAt?: string | null;
   createdAt: string;
 }

@@ -5,6 +5,7 @@
  * Employee Management System API
  * OpenAPI spec version: 0.1.0
  */
+import type { EmployeeUpdateCvData } from './employeeUpdateCvData';
 
 export interface EmployeeUpdate {
   firstName?: string;
@@ -24,4 +25,15 @@ export interface EmployeeUpdate {
   allowances?: number;
   enrollNumber?: string;
   status?: string;
+  address?: string;
+  fatherName?: string;
+  emergencyContact?: string;
+  bloodGroup?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  religion?: string;
+  nationality?: string;
+  profilePhoto?: string;
+  cvData?: EmployeeUpdateCvData;
+  cvStatus?: string;
 }

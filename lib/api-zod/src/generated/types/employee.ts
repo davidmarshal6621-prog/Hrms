@@ -5,6 +5,7 @@
  * Employee Management System API
  * OpenAPI spec version: 0.1.0
  */
+import type { EmployeeCvData } from './employeeCvData';
 
 export interface Employee {
   id: number;
@@ -40,5 +41,27 @@ export interface Employee {
   /** @nullable */
   enrollNumber?: string | null;
   status: string;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  fatherName?: string | null;
+  /** @nullable */
+  emergencyContact?: string | null;
+  /** @nullable */
+  bloodGroup?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  gender?: string | null;
+  /** @nullable */
+  religion?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  cvData?: EmployeeCvData;
+  /** @nullable */
+  cvStatus?: string | null;
+  /** @nullable */
+  profilePhoto?: string | null;
   createdAt: string;
 }

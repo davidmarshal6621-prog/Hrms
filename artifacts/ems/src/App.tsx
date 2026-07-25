@@ -12,6 +12,7 @@ import EmployeesList from "@/pages/employees/index";
 import NewEmployee from "@/pages/employees/new";
 import EmployeeProfile from "@/pages/employees/profile";
 import AttendanceList from "@/pages/attendance/index";
+import PunchLogs from "@/pages/attendance/punch-logs";
 import LeavesList from "@/pages/leaves/index";
 import NewLeave from "@/pages/leaves/new";
 import PayrollList from "@/pages/payroll/index";
@@ -20,6 +21,7 @@ import BranchesList from "@/pages/branches/index";
 import ShiftsList from "@/pages/shifts/index";
 import UsersList from "@/pages/users/index";
 import DevicesPage from "@/pages/devices/index";
+import CompanySettings from "@/pages/settings/company";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -47,6 +49,7 @@ function ProtectedRoute({ component: Component, roles, ...rest }: any) {
 }
 
 const ADMIN_ROLES = ["super_admin", "admin", "hr"];
+const ADMIN_HR_ROLES = ["super_admin", "admin", "hr"];
 
 function Router() {
   return (
@@ -63,6 +66,10 @@ function Router() {
       <Route path="/employees/new"><ProtectedRoute component={NewEmployee} /></Route>
       <Route path="/employees/:id"><ProtectedRoute component={EmployeeProfile} /></Route>
 
+      {/* attendance routes — punch-logs before /attendance to avoid prefix match */}
+      <Route path="/attendance/punch-logs">
+        <ProtectedRoute component={PunchLogs} roles={ADMIN_HR_ROLES} />
+      </Route>
       <Route path="/attendance"><ProtectedRoute component={AttendanceList} /></Route>
 
       <Route path="/leaves"><ProtectedRoute component={LeavesList} /></Route>
@@ -75,6 +82,10 @@ function Router() {
       <Route path="/shifts"><ProtectedRoute component={ShiftsList} roles={["super_admin", "admin"]} /></Route>
       <Route path="/users"><ProtectedRoute component={UsersList} roles={["super_admin", "admin"]} /></Route>
       <Route path="/devices"><ProtectedRoute component={DevicesPage} roles={["super_admin", "admin"]} /></Route>
+
+      <Route path="/settings/company">
+        <ProtectedRoute component={CompanySettings} roles={["super_admin", "admin"]} />
+      </Route>
 
       <Route component={NotFound} />
     </Switch>

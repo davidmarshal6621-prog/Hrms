@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, and, or, count, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, employeesTable, departmentsTable, branchesTable, shiftsTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -26,6 +26,13 @@ async function enrichEmployee(emp: typeof employeesTable.$inferSelect) {
     dateOfJoining: emp.dateOfJoining,
     basicSalary: emp.basicSalary, allowances: emp.allowances,
     enrollNumber: emp.enrollNumber, status: emp.status,
+    address: emp.address, fatherName: emp.fatherName,
+    emergencyContact: emp.emergencyContact, bloodGroup: emp.bloodGroup,
+    dateOfBirth: emp.dateOfBirth, gender: emp.gender,
+    religion: emp.religion, nationality: emp.nationality,
+    cvData: emp.cvData ? (() => { try { return JSON.parse(emp.cvData!); } catch { return null; } })() : null,
+    cvStatus: emp.cvStatus,
+    profilePhoto: emp.profilePhoto,
     createdAt: emp.createdAt.toISOString(),
   };
 }
@@ -44,13 +51,11 @@ router.get("/employees/stats", async (_req, res): Promise<void> => {
   const newThisMonth = employees.filter(e => e.dateOfJoining && e.dateOfJoining >= startOfMonth).length;
 
   const byDepartment = depts.map(d => ({
-    name: d.name,
-    count: employees.filter(e => e.departmentId === d.id).length,
+    name: d.name, count: employees.filter(e => e.departmentId === d.id).length,
   })).filter(d => d.count > 0);
 
   const byBranch = branches.map(b => ({
-    name: b.name,
-    count: employees.filter(e => e.branchId === b.id).length,
+    name: b.name, count: employees.filter(e => e.branchId === b.id).length,
   })).filter(b => b.count > 0);
 
   res.json({ total, active, inactive, newThisMonth, byDepartment, byBranch });
@@ -72,11 +77,11 @@ router.get("/employees", async (req, res): Promise<void> => {
       e.firstName.toLowerCase().includes(s) ||
       e.lastName.toLowerCase().includes(s) ||
       e.employeeCode.toLowerCase().includes(s) ||
-      (e.email?.toLowerCase().includes(s) ?? false)
+      (e.email?.toLowerCase().includes(s) ?? false) ||
+      (e.cnic?.toLowerCase().includes(s) ?? false)
     );
   }
 
-  // Batch enrich
   const depts = await db.select().from(departmentsTable);
   const branchRows = await db.select().from(branchesTable);
   const shiftRows = await db.select().from(shiftsTable);
@@ -96,6 +101,12 @@ router.get("/employees", async (req, res): Promise<void> => {
     dateOfJoining: emp.dateOfJoining,
     basicSalary: emp.basicSalary, allowances: emp.allowances,
     enrollNumber: emp.enrollNumber, status: emp.status,
+    address: emp.address, fatherName: emp.fatherName,
+    emergencyContact: emp.emergencyContact, bloodGroup: emp.bloodGroup,
+    dateOfBirth: emp.dateOfBirth, gender: emp.gender,
+    religion: emp.religion, nationality: emp.nationality,
+    cvData: emp.cvData ? (() => { try { return JSON.parse(emp.cvData!); } catch { return null; } })() : null,
+    cvStatus: emp.cvStatus, profilePhoto: emp.profilePhoto,
     createdAt: emp.createdAt.toISOString(),
   }));
 
@@ -103,8 +114,11 @@ router.get("/employees", async (req, res): Promise<void> => {
 });
 
 router.post("/employees", async (req, res): Promise<void> => {
-  const { firstName, lastName, employeeCode, email, phone, cnic, designation,
-    departmentId, branchId, shiftId, dateOfJoining, basicSalary, allowances, enrollNumber } = req.body;
+  const {
+    firstName, lastName, employeeCode, email, phone, cnic, designation,
+    departmentId, branchId, shiftId, dateOfJoining, basicSalary, allowances, enrollNumber,
+    address, fatherName, emergencyContact, bloodGroup, dateOfBirth, gender, religion, nationality,
+  } = req.body;
 
   if (!firstName || !lastName || !employeeCode) {
     res.status(400).json({ error: "firstName, lastName, employeeCode required" });
@@ -117,6 +131,10 @@ router.post("/employees", async (req, res): Promise<void> => {
     shiftId: shiftId ?? null, dateOfJoining: dateOfJoining ?? null,
     basicSalary: basicSalary ?? null, allowances: allowances ?? 0,
     enrollNumber: enrollNumber ?? null,
+    address: address ?? null, fatherName: fatherName ?? null,
+    emergencyContact: emergencyContact ?? null, bloodGroup: bloodGroup ?? null,
+    dateOfBirth: dateOfBirth ?? null, gender: gender ?? null,
+    religion: religion ?? null, nationality: nationality ?? null,
   }).returning();
 
   res.status(201).json(await enrichEmployee(emp));
@@ -135,22 +153,29 @@ router.patch("/employees/:id", async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
 
-  const fields = ["firstName", "lastName", "email", "phone", "cnic", "designation",
+  const fields = [
+    "firstName", "lastName", "email", "phone", "cnic", "designation",
     "departmentId", "branchId", "shiftId", "dateOfJoining", "basicSalary", "allowances",
-    "enrollNumber", "status"];
+    "enrollNumber", "status",
+    "address", "fatherName", "emergencyContact", "bloodGroup",
+    "dateOfBirth", "gender", "religion", "nationality", "profilePhoto",
+  ];
 
   const updates: Record<string, unknown> = {};
   for (const f of fields) {
-    if (req.body[f] !== undefined) {
-      // Convert camelCase to snake_case mapping
-      const colMap: Record<string, string> = {
-        firstName: "firstName", lastName: "lastName", email: "email", phone: "phone",
-        cnic: "cnic", designation: "designation", departmentId: "departmentId",
-        branchId: "branchId", shiftId: "shiftId", dateOfJoining: "dateOfJoining",
-        basicSalary: "basicSalary", allowances: "allowances", enrollNumber: "enrollNumber",
-        status: "status",
-      };
-      updates[colMap[f]] = req.body[f];
+    if (req.body[f] !== undefined) updates[f] = req.body[f];
+  }
+
+  // CV update with approval workflow
+  if (req.body.cvData !== undefined) {
+    updates.cvData = typeof req.body.cvData === "string"
+      ? req.body.cvData
+      : JSON.stringify(req.body.cvData);
+    // If employee submitting own CV update, set to pending; if HR/admin, set to approved
+    if (req.body.cvStatus !== undefined) {
+      updates.cvStatus = req.body.cvStatus;
+    } else {
+      updates.cvStatus = "pending_approval";
     }
   }
 

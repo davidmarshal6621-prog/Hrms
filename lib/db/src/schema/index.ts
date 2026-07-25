@@ -7,3 +7,5 @@ export * from "./attendance";
 export * from "./leaves";
 export * from "./payroll";
 export * from "./devices";
+export * from "./punch_logs";
+export * from "./company_settings";

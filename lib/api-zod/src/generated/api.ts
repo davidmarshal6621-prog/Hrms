@@ -9,7 +9,6 @@ import * as zod from 'zod';
 
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -64,6 +63,7 @@ export const ListUsersResponseItem = zod.object({
   "role": zod.string(),
   "isActive": zod.boolean().optional(),
   "employeeId": zod.number().nullish(),
+  "tempPassword": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListUsersResponse = zod.array(ListUsersResponseItem)
@@ -95,6 +95,7 @@ export const GetUserResponse = zod.object({
   "role": zod.string(),
   "isActive": zod.boolean().optional(),
   "employeeId": zod.number().nullish(),
+  "tempPassword": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -122,6 +123,7 @@ export const UpdateUserResponse = zod.object({
   "role": zod.string(),
   "isActive": zod.boolean().optional(),
   "employeeId": zod.number().nullish(),
+  "tempPassword": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -288,6 +290,19 @@ export const ListEmployeesResponseItem = zod.object({
   "allowances": zod.number().nullish(),
   "enrollNumber": zod.string().nullish(),
   "status": zod.string(),
+  "address": zod.string().nullish(),
+  "fatherName": zod.string().nullish(),
+  "emergencyContact": zod.string().nullish(),
+  "bloodGroup": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "gender": zod.string().nullish(),
+  "religion": zod.string().nullish(),
+  "nationality": zod.string().nullish(),
+  "cvData": zod.object({
+
+}).passthrough().nullish(),
+  "cvStatus": zod.string().nullish(),
+  "profilePhoto": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListEmployeesResponse = zod.array(ListEmployeesResponseItem)
@@ -310,7 +325,13 @@ export const CreateEmployeeBody = zod.object({
   "dateOfJoining": zod.string().optional(),
   "basicSalary": zod.number().optional(),
   "allowances": zod.number().optional(),
-  "enrollNumber": zod.string().optional()
+  "enrollNumber": zod.string().optional(),
+  "address": zod.string().optional(),
+  "fatherName": zod.string().optional(),
+  "emergencyContact": zod.string().optional(),
+  "bloodGroup": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "gender": zod.string().optional()
 })
 
 
@@ -360,6 +381,19 @@ export const GetEmployeeResponse = zod.object({
   "allowances": zod.number().nullish(),
   "enrollNumber": zod.string().nullish(),
   "status": zod.string(),
+  "address": zod.string().nullish(),
+  "fatherName": zod.string().nullish(),
+  "emergencyContact": zod.string().nullish(),
+  "bloodGroup": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "gender": zod.string().nullish(),
+  "religion": zod.string().nullish(),
+  "nationality": zod.string().nullish(),
+  "cvData": zod.object({
+
+}).passthrough().nullish(),
+  "cvStatus": zod.string().nullish(),
+  "profilePhoto": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -385,7 +419,20 @@ export const UpdateEmployeeBody = zod.object({
   "basicSalary": zod.number().optional(),
   "allowances": zod.number().optional(),
   "enrollNumber": zod.string().optional(),
-  "status": zod.string().optional()
+  "status": zod.string().optional(),
+  "address": zod.string().optional(),
+  "fatherName": zod.string().optional(),
+  "emergencyContact": zod.string().optional(),
+  "bloodGroup": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "gender": zod.string().optional(),
+  "religion": zod.string().optional(),
+  "nationality": zod.string().optional(),
+  "profilePhoto": zod.string().optional(),
+  "cvData": zod.object({
+
+}).passthrough().optional(),
+  "cvStatus": zod.string().optional()
 })
 
 export const UpdateEmployeeResponse = zod.object({
@@ -408,6 +455,19 @@ export const UpdateEmployeeResponse = zod.object({
   "allowances": zod.number().nullish(),
   "enrollNumber": zod.string().nullish(),
   "status": zod.string(),
+  "address": zod.string().nullish(),
+  "fatherName": zod.string().nullish(),
+  "emergencyContact": zod.string().nullish(),
+  "bloodGroup": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "gender": zod.string().nullish(),
+  "religion": zod.string().nullish(),
+  "nationality": zod.string().nullish(),
+  "cvData": zod.object({
+
+}).passthrough().nullish(),
+  "cvStatus": zod.string().nullish(),
+  "profilePhoto": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -445,6 +505,14 @@ export const ListAttendanceResponseItem = zod.object({
   "isEarlyOut": zod.boolean().optional(),
   "source": zod.string().optional(),
   "notes": zod.string().nullish(),
+  "checkInDeviceName": zod.string().nullish(),
+  "checkOutDeviceName": zod.string().nullish(),
+  "checkInVerifyType": zod.string().nullish(),
+  "checkOutVerifyType": zod.string().nullish(),
+  "isManuallyEdited": zod.boolean().optional(),
+  "correctionNote": zod.string().nullish(),
+  "correctedBy": zod.string().nullish(),
+  "correctedAt": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListAttendanceResponse = zod.array(ListAttendanceResponseItem)
@@ -500,6 +568,14 @@ export const GetTodayAttendanceResponseItem = zod.object({
   "isEarlyOut": zod.boolean().optional(),
   "source": zod.string().optional(),
   "notes": zod.string().nullish(),
+  "checkInDeviceName": zod.string().nullish(),
+  "checkOutDeviceName": zod.string().nullish(),
+  "checkInVerifyType": zod.string().nullish(),
+  "checkOutVerifyType": zod.string().nullish(),
+  "isManuallyEdited": zod.boolean().optional(),
+  "correctionNote": zod.string().nullish(),
+  "correctedBy": zod.string().nullish(),
+  "correctedAt": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const GetTodayAttendanceResponse = zod.array(GetTodayAttendanceResponseItem)
@@ -536,7 +612,9 @@ export const UpdateAttendanceBody = zod.object({
   "checkIn": zod.string().optional(),
   "checkOut": zod.string().optional(),
   "status": zod.string().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "correctionNote": zod.string().optional(),
+  "correctedBy": zod.string().optional()
 })
 
 export const UpdateAttendanceResponse = zod.object({
@@ -553,6 +631,14 @@ export const UpdateAttendanceResponse = zod.object({
   "isEarlyOut": zod.boolean().optional(),
   "source": zod.string().optional(),
   "notes": zod.string().nullish(),
+  "checkInDeviceName": zod.string().nullish(),
+  "checkOutDeviceName": zod.string().nullish(),
+  "checkInVerifyType": zod.string().nullish(),
+  "checkOutVerifyType": zod.string().nullish(),
+  "isManuallyEdited": zod.boolean().optional(),
+  "correctionNote": zod.string().nullish(),
+  "correctedBy": zod.string().nullish(),
+  "correctedAt": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -562,6 +648,78 @@ export const UpdateAttendanceResponse = zod.object({
  */
 export const DeleteAttendanceParams = zod.object({
   "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List raw punch log events from ZKTeco devices
+ */
+export const ListPunchLogsQueryParams = zod.object({
+  "employeeId": zod.coerce.number().optional(),
+  "date": zod.coerce.string().optional(),
+  "startDate": zod.coerce.string().optional(),
+  "endDate": zod.coerce.string().optional(),
+  "deviceId": zod.coerce.number().optional(),
+  "enrollNumber": zod.coerce.string().optional(),
+  "limit": zod.coerce.number().optional()
+})
+
+export const ListPunchLogsResponseItem = zod.object({
+  "id": zod.number(),
+  "employeeId": zod.number().nullish(),
+  "employeeName": zod.string().nullish(),
+  "employeeCode": zod.string().nullish(),
+  "enrollNumber": zod.string(),
+  "deviceId": zod.number().nullish(),
+  "deviceName": zod.string().nullish(),
+  "punchTime": zod.string(),
+  "verifyType": zod.string(),
+  "punchDirection": zod.string(),
+  "rawPunch": zod.number().nullish(),
+  "rawVerify": zod.number().nullish(),
+  "createdAt": zod.string()
+})
+export const ListPunchLogsResponse = zod.array(ListPunchLogsResponseItem)
+
+
+/**
+ * @summary Get all company settings
+ */
+export const GetCompanySettingsResponse = zod.object({
+  "companyName": zod.string().optional(),
+  "companyLogo": zod.string().optional(),
+  "currency": zod.string().optional(),
+  "currencySymbol": zod.string().optional(),
+  "dateFormat": zod.string().optional(),
+  "salaryVisibility": zod.string().optional(),
+  "showSalaryToEmployee": zod.string().optional(),
+  "timezone": zod.string().optional()
+})
+
+
+/**
+ * @summary Update company settings
+ */
+export const UpdateCompanySettingsBody = zod.object({
+  "companyName": zod.string().optional(),
+  "companyLogo": zod.string().optional(),
+  "currency": zod.string().optional(),
+  "currencySymbol": zod.string().optional(),
+  "dateFormat": zod.string().optional(),
+  "salaryVisibility": zod.string().optional(),
+  "showSalaryToEmployee": zod.string().optional(),
+  "timezone": zod.string().optional()
+})
+
+export const UpdateCompanySettingsResponse = zod.object({
+  "companyName": zod.string().optional(),
+  "companyLogo": zod.string().optional(),
+  "currency": zod.string().optional(),
+  "currencySymbol": zod.string().optional(),
+  "dateFormat": zod.string().optional(),
+  "salaryVisibility": zod.string().optional(),
+  "showSalaryToEmployee": zod.string().optional(),
+  "timezone": zod.string().optional()
 })
 
 
@@ -963,6 +1121,14 @@ export const GetDashboardStatsResponse = zod.object({
   "isEarlyOut": zod.boolean().optional(),
   "source": zod.string().optional(),
   "notes": zod.string().nullish(),
+  "checkInDeviceName": zod.string().nullish(),
+  "checkOutDeviceName": zod.string().nullish(),
+  "checkInVerifyType": zod.string().nullish(),
+  "checkOutVerifyType": zod.string().nullish(),
+  "isManuallyEdited": zod.boolean().optional(),
+  "correctionNote": zod.string().nullish(),
+  "correctedBy": zod.string().nullish(),
+  "correctedAt": zod.string().nullish(),
   "createdAt": zod.string()
 })).optional(),
   "pendingLeaveRequests": zod.array(zod.object({

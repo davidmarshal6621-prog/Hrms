@@ -11,4 +11,6 @@ export interface AttendanceUpdate {
   checkOut?: string;
   status?: string;
   notes?: string;
+  correctionNote?: string;
+  correctedBy?: string;
 }

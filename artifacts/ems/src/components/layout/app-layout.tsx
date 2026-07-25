@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Users, CalendarCheck, FileText, DollarSign,
   Building2, GitBranch, Clock, UserCog, Cpu, ChevronRight,
+  ScanLine, Settings, ListFilter,
 } from "lucide-react";
 
 function NavLink({ href, icon: Icon, children }: { href: string; icon: any; children: React.ReactNode }) {
@@ -64,7 +65,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           <NavLink href="/dashboard" icon={LayoutDashboard}>Dashboard</NavLink>
 
-          {/* Employee section */}
+          {/* Workforce */}
           {isAdminOrHr && (
             <>
               <SectionLabel>Workforce</SectionLabel>
@@ -72,10 +73,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </>
           )}
 
+          {/* Daily */}
           <SectionLabel>Daily</SectionLabel>
           <NavLink href="/attendance" icon={CalendarCheck}>Attendance</NavLink>
+          {isAdminOrHr && (
+            <NavLink href="/attendance/punch-logs" icon={ScanLine}>Punch Logs</NavLink>
+          )}
           <NavLink href="/leaves" icon={FileText}>Leave Requests</NavLink>
 
+          {/* Finance */}
           {isAdminOrHr && (
             <>
               <SectionLabel>Finance</SectionLabel>
@@ -83,6 +89,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </>
           )}
 
+          {/* Configuration */}
           {isAdminOrHr && (
             <>
               <SectionLabel>Configuration</SectionLabel>
@@ -95,6 +102,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <NavLink href="/devices" icon={Cpu}>ZKTeco Devices</NavLink>
                 </>
               )}
+            </>
+          )}
+
+          {/* Settings */}
+          {isAdmin && (
+            <>
+              <SectionLabel>Settings</SectionLabel>
+              <NavLink href="/settings/company" icon={Settings}>Company Settings</NavLink>
             </>
           )}
         </nav>

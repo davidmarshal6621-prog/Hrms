@@ -12,6 +12,8 @@ import payrollRouter from "./payroll";
 import dashboardRouter from "./dashboard";
 import devicesRouter from "./devices";
 import reportsRouter from "./reports";
+import companySettingsRouter from "./company-settings";
+import punchLogsRouter from "./punch-logs";
 
 const router: IRouter = Router();
 
@@ -28,5 +30,7 @@ router.use(payrollRouter);
 router.use(dashboardRouter);
 router.use(devicesRouter);
 router.use(reportsRouter);
+router.use(companySettingsRouter);
+router.use(punchLogsRouter);
 
 export default router;
