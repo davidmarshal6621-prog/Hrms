@@ -2,6 +2,6 @@
 deployment: tasks:
     - npm install
     - npm run build
-    - export DEPLOYPATH=/home/techajzp/public_html/
+    - export DEPLOYPATH=/home/techajzp/aitechstore.online/hrms/
     - /bin/cp -R dist/* $DEPLOYPATH
 
