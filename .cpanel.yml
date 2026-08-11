@@ -1,5 +1,7 @@
 ---
-deployment:
-tasks:
-- npm install
-- npm run build
+deployment: tasks:
+    - npm install
+    - npm run build
+    - export DEPLOYPATH=/home/techajzp/public_html/
+    - /bin/cp -R dist/* $DEPLOYPATH
+
