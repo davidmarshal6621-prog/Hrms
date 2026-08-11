@@ -1137,6 +1137,52 @@ components:
           type: ["integer", "null"]
         tempPassword:
           type: ["string", "null"]
+        employeeCode:
+          type: ["string", "null"]
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        cnic:
+          type: ["string", "null"]
+        designation:
+          type: ["string", "null"]
+        departmentId:
+          type: ["integer", "null"]
+        branchId:
+          type: ["integer", "null"]
+        shiftId:
+          type: ["integer", "null"]
+        dateOfJoining:
+          type: ["string", "null"]
+        basicSalary:
+          type: ["number", "null"]
+        allowances:
+          type: ["number", "null"]
+        enrollNumber:
+          type: ["string", "null"]
+        status:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        fatherName:
+          type: ["string", "null"]
+        emergencyContact:
+          type: ["string", "null"]
+        bloodGroup:
+          type: ["string", "null"]
+        dateOfBirth:
+          type: ["string", "null"]
+        gender:
+          type: ["string", "null"]
+        religion:
+          type: ["string", "null"]
+        nationality:
+          type: ["string", "null"]
+        profilePhoto:
+          type: ["string", "null"]
         createdAt:
           type: string
 
@@ -1154,6 +1200,22 @@ components:
           type: string
         employeeId:
           type: ["integer", "null"]
+        employeeCode:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        departmentId:
+          type: ["integer", "null"]
+        branchId:
+          type: ["integer", "null"]
+        shiftId:
+          type: ["integer", "null"]
+        designation:
+          type: string
+        basicSalary:
+          type: number
 
     UserUpdate:
       type: object
@@ -1170,6 +1232,48 @@ components:
           type: string
         employeeId:
           type: ["integer", "null"]
+        employeeCode:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        cnic:
+          type: string
+        departmentId:
+          type: ["integer", "null"]
+        branchId:
+          type: ["integer", "null"]
+        shiftId:
+          type: ["integer", "null"]
+        designation:
+          type: string
+        basicSalary:
+          type: number
+        allowances:
+          type: number
+        enrollNumber:
+          type: string
+        status:
+          type: string
+        address:
+          type: string
+        fatherName:
+          type: string
+        emergencyContact:
+          type: string
+        bloodGroup:
+          type: string
+        dateOfBirth:
+          type: string
+        gender:
+          type: string
+        religion:
+          type: string
+        nationality:
+          type: string
 
     Branch:
       type: object
@@ -1632,6 +1736,20 @@ components:
         showSalaryToEmployee:
           type: string
         timezone:
+          type: string
+        defaultShiftId:
+          type: string
+        defaultDepartmentId:
+          type: string
+        defaultBranchId:
+          type: string
+        defaultDesignation:
+          type: string
+        defaultSalary:
+          type: string
+        defaultRole:
+          type: string
+        defaultPasswordPrefix:
           type: string
 
     LeaveType:

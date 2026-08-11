@@ -5,8 +5,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import multer from "multer";
-import bcrypt from "bcryptjs";
 import { getVerifyTypeName, getPunchDirection } from "./attendance.js";
+import { provisionEmployeeAccount } from "../lib/employee-provisioning.js";
 
 const router: IRouter = Router();
 const execFileAsync = promisify(execFile);
@@ -103,6 +103,18 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
   const enrollMap = new Map<string, { id: number; shiftId: number | null }>();
   for (const emp of employees) {
     if (emp.enrollNumber) enrollMap.set(emp.enrollNumber, { id: emp.id, shiftId: emp.shiftId });
+  }
+
+  // Attendance may contain a new ZK enroll number before an explicit user
+  // import. Provision it now so its first attendance record is not skipped.
+  const newEnrollNumbers = [...new Set(records.map(record => record.enrollNumber).filter(Boolean))]
+    .filter(enrollNumber => !enrollMap.has(enrollNumber));
+  for (const enrollNumber of newEnrollNumbers) {
+    const provisioned = await provisionEmployeeAccount({ enrollNumber });
+    enrollMap.set(enrollNumber, {
+      id: provisioned.employee.id,
+      shiftId: provisioned.employee.shiftId,
+    });
   }
 
   const shifts = await db.select().from(shiftsTable);
@@ -325,10 +337,6 @@ router.post("/devices/:id/import-users", async (req, res): Promise<void> => {
 
   const users: Array<{ userId: string; name: string; privilege: number }> = parsed.users ?? [];
 
-  const existingEmps = await db.select({ id: employeesTable.id, enrollNumber: employeesTable.enrollNumber, employeeCode: employeesTable.employeeCode })
-    .from(employeesTable);
-  const byEnroll = new Map(existingEmps.filter(e => e.enrollNumber).map(e => [e.enrollNumber!, e]));
-
   let created = 0;
   let updated = 0;
   let skipped = 0;
@@ -337,43 +345,26 @@ router.post("/devices/:id/import-users", async (req, res): Promise<void> => {
 
   for (const user of users) {
     const enrollNum = user.userId;
-    if (byEnroll.has(enrollNum)) { skipped++; continue; }
-
-    const nameParts = (user.name || "").trim().split(/\s+/);
-    const firstName = nameParts[0] || `User${enrollNum}`;
-    const lastName = nameParts.slice(1).join(" ") || "Unknown";
     const empCode = `ZK${enrollNum.padStart(4, "0")}`;
-
-    const [existByCode] = await db.select().from(employeesTable).where(eq(employeesTable.employeeCode, empCode));
-    let empId: number;
-
-    if (existByCode) {
-      await db.update(employeesTable).set({ enrollNumber: enrollNum }).where(eq(employeesTable.id, existByCode.id));
-      empId = existByCode.id;
-      updated++;
-    } else {
-      const [newEmp] = await db.insert(employeesTable).values({
-        employeeCode: empCode, firstName, lastName, enrollNumber: enrollNum, status: "active",
-      }).returning();
-      empId = newEmp.id;
+    const result = await provisionEmployeeAccount({
+      enrollNumber: enrollNum,
+      name: user.name,
+      employeeCode: empCode,
+    });
+    if (result.employeeCreated) {
       created++;
+    } else {
+      updated++;
     }
-
-    // Auto-create user account for this employee
-    const email = `${empCode.toLowerCase()}@company.local`;
-    const password = `ZK${enrollNum}!Pass`;
-
-    const [existUser] = await db.select().from(usersTable).where(eq(usersTable.email, email));
-    if (!existUser) {
-      const passwordHash = await bcrypt.hash(password, 10);
-      await db.insert(usersTable).values({
-        email, passwordHash, tempPassword: password,
-        name: `${firstName} ${lastName}`,
-        role: "employee",
-        employeeId: empId,
-      });
+    if (result.userCreated) {
       usersCreated++;
-      createdUsers.push({ employeeCode: empCode, email, password });
+      createdUsers.push({
+        employeeCode: empCode,
+        email: result.user.email,
+        password: result.user.tempPassword ?? "",
+      });
+    } else {
+      skipped++;
     }
   }
 

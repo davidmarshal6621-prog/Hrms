@@ -38,6 +38,52 @@ export interface User {
   employeeId?: number | null;
   /** @nullable */
   tempPassword?: string | null;
+  /** @nullable */
+  employeeCode?: string | null;
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  cnic?: string | null;
+  /** @nullable */
+  designation?: string | null;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  shiftId?: number | null;
+  /** @nullable */
+  dateOfJoining?: string | null;
+  /** @nullable */
+  basicSalary?: number | null;
+  /** @nullable */
+  allowances?: number | null;
+  /** @nullable */
+  enrollNumber?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  fatherName?: string | null;
+  /** @nullable */
+  emergencyContact?: string | null;
+  /** @nullable */
+  bloodGroup?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  gender?: string | null;
+  /** @nullable */
+  religion?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  profilePhoto?: string | null;
   createdAt: string;
 }
 
@@ -48,6 +94,17 @@ export interface UserInput {
   role: string;
   /** @nullable */
   employeeId?: number | null;
+  employeeCode?: string;
+  firstName?: string;
+  lastName?: string;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  shiftId?: number | null;
+  designation?: string;
+  basicSalary?: number;
 }
 
 export interface UserUpdate {
@@ -58,6 +115,30 @@ export interface UserUpdate {
   password?: string;
   /** @nullable */
   employeeId?: number | null;
+  employeeCode?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  cnic?: string;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  shiftId?: number | null;
+  designation?: string;
+  basicSalary?: number;
+  allowances?: number;
+  enrollNumber?: string;
+  status?: string;
+  address?: string;
+  fatherName?: string;
+  emergencyContact?: string;
+  bloodGroup?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  religion?: string;
+  nationality?: string;
 }
 
 export interface Branch {
@@ -375,6 +456,13 @@ export interface CompanySettings {
   salaryVisibility?: string;
   showSalaryToEmployee?: string;
   timezone?: string;
+  defaultShiftId?: string;
+  defaultDepartmentId?: string;
+  defaultBranchId?: string;
+  defaultDesignation?: string;
+  defaultSalary?: string;
+  defaultRole?: string;
+  defaultPasswordPrefix?: string;
 }
 
 export interface LeaveType {

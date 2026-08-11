@@ -15,4 +15,11 @@ export interface CompanySettings {
   salaryVisibility?: string;
   showSalaryToEmployee?: string;
   timezone?: string;
+  defaultShiftId?: string;
+  defaultDepartmentId?: string;
+  defaultBranchId?: string;
+  defaultDesignation?: string;
+  defaultSalary?: string;
+  defaultRole?: string;
+  defaultPasswordPrefix?: string;
 }

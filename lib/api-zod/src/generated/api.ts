@@ -64,6 +64,29 @@ export const ListUsersResponseItem = zod.object({
   "isActive": zod.boolean().optional(),
   "employeeId": zod.number().nullish(),
   "tempPassword": zod.string().nullish(),
+  "employeeCode": zod.string().nullish(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "cnic": zod.string().nullish(),
+  "designation": zod.string().nullish(),
+  "departmentId": zod.number().nullish(),
+  "branchId": zod.number().nullish(),
+  "shiftId": zod.number().nullish(),
+  "dateOfJoining": zod.string().nullish(),
+  "basicSalary": zod.number().nullish(),
+  "allowances": zod.number().nullish(),
+  "enrollNumber": zod.string().nullish(),
+  "status": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "fatherName": zod.string().nullish(),
+  "emergencyContact": zod.string().nullish(),
+  "bloodGroup": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "gender": zod.string().nullish(),
+  "religion": zod.string().nullish(),
+  "nationality": zod.string().nullish(),
+  "profilePhoto": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListUsersResponse = zod.array(ListUsersResponseItem)
@@ -77,7 +100,15 @@ export const CreateUserBody = zod.object({
   "password": zod.string(),
   "name": zod.string(),
   "role": zod.string(),
-  "employeeId": zod.number().nullish()
+  "employeeId": zod.number().nullish(),
+  "employeeCode": zod.string().optional(),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
+  "departmentId": zod.number().nullish(),
+  "branchId": zod.number().nullish(),
+  "shiftId": zod.number().nullish(),
+  "designation": zod.string().optional(),
+  "basicSalary": zod.number().optional()
 })
 
 
@@ -96,6 +127,29 @@ export const GetUserResponse = zod.object({
   "isActive": zod.boolean().optional(),
   "employeeId": zod.number().nullish(),
   "tempPassword": zod.string().nullish(),
+  "employeeCode": zod.string().nullish(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "cnic": zod.string().nullish(),
+  "designation": zod.string().nullish(),
+  "departmentId": zod.number().nullish(),
+  "branchId": zod.number().nullish(),
+  "shiftId": zod.number().nullish(),
+  "dateOfJoining": zod.string().nullish(),
+  "basicSalary": zod.number().nullish(),
+  "allowances": zod.number().nullish(),
+  "enrollNumber": zod.string().nullish(),
+  "status": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "fatherName": zod.string().nullish(),
+  "emergencyContact": zod.string().nullish(),
+  "bloodGroup": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "gender": zod.string().nullish(),
+  "religion": zod.string().nullish(),
+  "nationality": zod.string().nullish(),
+  "profilePhoto": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -113,7 +167,28 @@ export const UpdateUserBody = zod.object({
   "role": zod.string().optional(),
   "isActive": zod.boolean().optional(),
   "password": zod.string().optional(),
-  "employeeId": zod.number().nullish()
+  "employeeId": zod.number().nullish(),
+  "employeeCode": zod.string().optional(),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "cnic": zod.string().optional(),
+  "departmentId": zod.number().nullish(),
+  "branchId": zod.number().nullish(),
+  "shiftId": zod.number().nullish(),
+  "designation": zod.string().optional(),
+  "basicSalary": zod.number().optional(),
+  "allowances": zod.number().optional(),
+  "enrollNumber": zod.string().optional(),
+  "status": zod.string().optional(),
+  "address": zod.string().optional(),
+  "fatherName": zod.string().optional(),
+  "emergencyContact": zod.string().optional(),
+  "bloodGroup": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "gender": zod.string().optional(),
+  "religion": zod.string().optional(),
+  "nationality": zod.string().optional()
 })
 
 export const UpdateUserResponse = zod.object({
@@ -124,6 +199,29 @@ export const UpdateUserResponse = zod.object({
   "isActive": zod.boolean().optional(),
   "employeeId": zod.number().nullish(),
   "tempPassword": zod.string().nullish(),
+  "employeeCode": zod.string().nullish(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "cnic": zod.string().nullish(),
+  "designation": zod.string().nullish(),
+  "departmentId": zod.number().nullish(),
+  "branchId": zod.number().nullish(),
+  "shiftId": zod.number().nullish(),
+  "dateOfJoining": zod.string().nullish(),
+  "basicSalary": zod.number().nullish(),
+  "allowances": zod.number().nullish(),
+  "enrollNumber": zod.string().nullish(),
+  "status": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "fatherName": zod.string().nullish(),
+  "emergencyContact": zod.string().nullish(),
+  "bloodGroup": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "gender": zod.string().nullish(),
+  "religion": zod.string().nullish(),
+  "nationality": zod.string().nullish(),
+  "profilePhoto": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -693,7 +791,14 @@ export const GetCompanySettingsResponse = zod.object({
   "dateFormat": zod.string().optional(),
   "salaryVisibility": zod.string().optional(),
   "showSalaryToEmployee": zod.string().optional(),
-  "timezone": zod.string().optional()
+  "timezone": zod.string().optional(),
+  "defaultShiftId": zod.string().optional(),
+  "defaultDepartmentId": zod.string().optional(),
+  "defaultBranchId": zod.string().optional(),
+  "defaultDesignation": zod.string().optional(),
+  "defaultSalary": zod.string().optional(),
+  "defaultRole": zod.string().optional(),
+  "defaultPasswordPrefix": zod.string().optional()
 })
 
 
@@ -708,7 +813,14 @@ export const UpdateCompanySettingsBody = zod.object({
   "dateFormat": zod.string().optional(),
   "salaryVisibility": zod.string().optional(),
   "showSalaryToEmployee": zod.string().optional(),
-  "timezone": zod.string().optional()
+  "timezone": zod.string().optional(),
+  "defaultShiftId": zod.string().optional(),
+  "defaultDepartmentId": zod.string().optional(),
+  "defaultBranchId": zod.string().optional(),
+  "defaultDesignation": zod.string().optional(),
+  "defaultSalary": zod.string().optional(),
+  "defaultRole": zod.string().optional(),
+  "defaultPasswordPrefix": zod.string().optional()
 })
 
 export const UpdateCompanySettingsResponse = zod.object({
@@ -719,7 +831,14 @@ export const UpdateCompanySettingsResponse = zod.object({
   "dateFormat": zod.string().optional(),
   "salaryVisibility": zod.string().optional(),
   "showSalaryToEmployee": zod.string().optional(),
-  "timezone": zod.string().optional()
+  "timezone": zod.string().optional(),
+  "defaultShiftId": zod.string().optional(),
+  "defaultDepartmentId": zod.string().optional(),
+  "defaultBranchId": zod.string().optional(),
+  "defaultDesignation": zod.string().optional(),
+  "defaultSalary": zod.string().optional(),
+  "defaultRole": zod.string().optional(),
+  "defaultPasswordPrefix": zod.string().optional()
 })
 
 

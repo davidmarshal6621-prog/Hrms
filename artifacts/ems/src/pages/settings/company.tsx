@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useGetCompanySettings } from "@workspace/api-client-react";
+import { useGetCompanySettings, useListDepartments, useListBranches, useListShifts } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Building2, Globe, DollarSign, Eye } from "lucide-react";
+import { Save, Building2, Globe, Eye, UserRoundCog } from "lucide-react";
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const token = localStorage.getItem("ems_token");
@@ -60,6 +60,9 @@ export default function CompanySettings() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: settings, isLoading } = useGetCompanySettings();
+  const { data: departments = [] } = useListDepartments();
+  const { data: branches = [] } = useListBranches();
+  const { data: shifts = [] } = useListShifts();
 
   const [form, setForm] = useState({
     companyName: "",
@@ -70,6 +73,13 @@ export default function CompanySettings() {
     salaryVisibility: "admin_hr",
     showSalaryToEmployee: "false",
     timezone: "Asia/Karachi",
+    defaultShiftId: "",
+    defaultDepartmentId: "",
+    defaultBranchId: "",
+    defaultDesignation: "Employee",
+    defaultSalary: "0",
+    defaultRole: "employee",
+    defaultPasswordPrefix: "ZK",
   });
 
   useEffect(() => {
@@ -83,6 +93,13 @@ export default function CompanySettings() {
         salaryVisibility: settings.salaryVisibility || "admin_hr",
         showSalaryToEmployee: settings.showSalaryToEmployee || "false",
         timezone: settings.timezone || "Asia/Karachi",
+        defaultShiftId: settings.defaultShiftId || "",
+        defaultDepartmentId: settings.defaultDepartmentId || "",
+        defaultBranchId: settings.defaultBranchId || "",
+        defaultDesignation: settings.defaultDesignation || "Employee",
+        defaultSalary: settings.defaultSalary || "0",
+        defaultRole: settings.defaultRole || "employee",
+        defaultPasswordPrefix: settings.defaultPasswordPrefix || "ZK",
       });
     }
   }, [settings]);
@@ -186,6 +203,64 @@ export default function CompanySettings() {
             </SelectContent>
           </Select>
         </Field>
+      </Section>
+
+      {/* Provisioning Defaults */}
+      <Section icon={UserRoundCog} title="New User Defaults">
+        <p className="text-sm text-gray-500 -mt-2">
+          These values are applied to new manual users and employees discovered during ZKTeco sync.
+          Existing employees are not changed when you save this section.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Default Shift">
+            <Select value={form.defaultShiftId} onValueChange={v => setForm(f => ({ ...f, defaultShiftId: v }))}>
+              <SelectTrigger className="bg-white"><SelectValue placeholder="Select default shift" /></SelectTrigger>
+              <SelectContent>
+                {shifts.map(s => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.name} ({s.startTime} - {s.endTime})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Default Department">
+            <Select value={form.defaultDepartmentId} onValueChange={v => setForm(f => ({ ...f, defaultDepartmentId: v }))}>
+              <SelectTrigger className="bg-white"><SelectValue placeholder="Select default department" /></SelectTrigger>
+              <SelectContent>
+                {departments.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Default Branch">
+            <Select value={form.defaultBranchId} onValueChange={v => setForm(f => ({ ...f, defaultBranchId: v }))}>
+              <SelectTrigger className="bg-white"><SelectValue placeholder="Select default branch" /></SelectTrigger>
+              <SelectContent>
+                {branches.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Default Designation">
+            <Input value={form.defaultDesignation} onChange={e => setForm(f => ({ ...f, defaultDesignation: e.target.value }))} />
+          </Field>
+          <Field label="Default Salary">
+            <Input type="number" min="0" value={form.defaultSalary} onChange={e => setForm(f => ({ ...f, defaultSalary: e.target.value }))} />
+          </Field>
+          <Field label="Default Role">
+            <Select value={form.defaultRole} onValueChange={v => setForm(f => ({ ...f, defaultRole: v }))}>
+              <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="employee">Employee</SelectItem>
+                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="hr">HR</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Auto Password Prefix">
+            <Input value={form.defaultPasswordPrefix} onChange={e => setForm(f => ({ ...f, defaultPasswordPrefix: e.target.value }))} placeholder="ZK" />
+          </Field>
+        </div>
       </Section>
 
       {/* Salary Visibility */}

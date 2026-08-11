@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, employeesTable, departmentsTable, branchesTable, shiftsTable } from "@workspace/db";
+import { getProvisioningDefaults } from "../lib/employee-provisioning.js";
 
 const router: IRouter = Router();
 
@@ -125,11 +126,12 @@ router.post("/employees", async (req, res): Promise<void> => {
     return;
   }
 
+  const defaults = await getProvisioningDefaults();
   const [emp] = await db.insert(employeesTable).values({
     firstName, lastName, employeeCode, email, phone, cnic, designation,
-    departmentId: departmentId ?? null, branchId: branchId ?? null,
-    shiftId: shiftId ?? null, dateOfJoining: dateOfJoining ?? null,
-    basicSalary: basicSalary ?? null, allowances: allowances ?? 0,
+    departmentId: departmentId ?? defaults.departmentId, branchId: branchId ?? defaults.branchId,
+    shiftId: shiftId ?? defaults.shiftId, dateOfJoining: dateOfJoining ?? null,
+    basicSalary: basicSalary ?? defaults.salary, allowances: allowances ?? 0,
     enrollNumber: enrollNumber ?? null,
     address: address ?? null, fatherName: fatherName ?? null,
     emergencyContact: emergencyContact ?? null, bloodGroup: bloodGroup ?? null,

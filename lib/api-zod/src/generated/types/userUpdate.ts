@@ -14,4 +14,28 @@ export interface UserUpdate {
   password?: string;
   /** @nullable */
   employeeId?: number | null;
+  employeeCode?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  cnic?: string;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  shiftId?: number | null;
+  designation?: string;
+  basicSalary?: number;
+  allowances?: number;
+  enrollNumber?: string;
+  status?: string;
+  address?: string;
+  fatherName?: string;
+  emergencyContact?: string;
+  bloodGroup?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  religion?: string;
+  nationality?: string;
 }

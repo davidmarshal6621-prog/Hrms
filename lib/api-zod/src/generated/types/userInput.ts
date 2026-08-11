@@ -13,4 +13,15 @@ export interface UserInput {
   role: string;
   /** @nullable */
   employeeId?: number | null;
+  employeeCode?: string;
+  firstName?: string;
+  lastName?: string;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  shiftId?: number | null;
+  designation?: string;
+  basicSalary?: number;
 }
