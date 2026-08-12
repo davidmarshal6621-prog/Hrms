@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { apiUrl } from "@/lib/api-path";
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   value: i + 1,
@@ -27,7 +28,7 @@ const MONTHS = Array.from({ length: 12 }, (_, i) => ({
 
 async function downloadFile(url: string, filename: string) {
   const token = localStorage.getItem("ems_token");
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(apiUrl(url), { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Download failed: ${res.statusText}`);
   const blob = await res.blob();
   const a = document.createElement("a");
@@ -39,7 +40,7 @@ async function downloadFile(url: string, filename: string) {
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const token = localStorage.getItem("ems_token");
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...opts,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...opts?.headers },
   });
@@ -140,7 +141,7 @@ export default function EmployeeProfile() {
     setDownloading("att-csv");
     try {
       await downloadFile(
-        `/api/reports/attendance-csv?employeeId=${empId}&month=${attMonth}&year=${attYear}`,
+        `/reports/attendance-csv?employeeId=${empId}&month=${attMonth}&year=${attYear}`,
         `attendance_${e?.employeeCode}_${MONTHS[attMonth - 1].label}_${attYear}.csv`
       );
       toast({ title: "Download started" });
@@ -154,7 +155,7 @@ export default function EmployeeProfile() {
     setDownloading("payslip");
     try {
       await downloadFile(
-        `/api/reports/payslip-pdf?employeeId=${empId}&month=${month}&year=${year}`,
+        `/reports/payslip-pdf?employeeId=${empId}&month=${month}&year=${year}`,
         `payslip_${e?.employeeCode}_${MONTHS[month - 1].label}_${year}.pdf`
       );
       toast({ title: "Payslip downloaded" });

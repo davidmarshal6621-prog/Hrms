@@ -5,6 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useEffect } from "react";
+import { setBaseUrl } from "@workspace/api-client-react";
+import { apiBasePath } from "@/lib/api-path";
 
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
@@ -25,6 +27,10 @@ import CompanySettings from "@/pages/settings/company";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
+
+// Generated API hooks use `/api/...` paths. This keeps them working both at
+// the domain root and when the app is hosted in a cPanel subdirectory.
+setBaseUrl(apiBasePath || null);
 
 function ProtectedRoute({ component: Component, roles, ...rest }: any) {
   const { isAuthenticated, user } = useAuth();

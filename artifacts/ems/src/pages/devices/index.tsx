@@ -12,6 +12,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Plus, RefreshCw, Wifi, WifiOff, Upload, Trash2, Settings, Users } from "lucide-react";
+import { apiUrl } from "@/lib/api-path";
 
 interface Device {
   id: number; name: string; ip: string; port: number;
@@ -22,7 +23,7 @@ interface Device {
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const token = localStorage.getItem("ems_token");
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...opts,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...opts?.headers },
   });
@@ -70,7 +71,7 @@ export default function DevicesPage() {
     setSyncLog(null);
     try {
       const token = localStorage.getItem("ems_token");
-      const res = await fetch(`/api/devices/${device.id}/import-users`, {
+      const res = await fetch(apiUrl(`/devices/${device.id}/import-users`), {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -103,7 +104,7 @@ export default function DevicesPage() {
     setSyncLog(null);
     try {
       const token = localStorage.getItem("ems_token");
-      const res = await fetch(`/api/devices/${device.id}/sync`, {
+      const res = await fetch(apiUrl(`/devices/${device.id}/sync`), {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -136,7 +137,7 @@ export default function DevicesPage() {
     formData.append("file", file);
     const token = localStorage.getItem("ems_token");
     try {
-      const res = await fetch("/api/employees/import-enroll", {
+      const res = await fetch(apiUrl("/employees/import-enroll"), {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,

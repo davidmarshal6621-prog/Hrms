@@ -5,6 +5,7 @@ import {
   useListBranches,
   useListShifts,
 } from "@workspace/api-client-react";
+import { apiUrl } from "@/lib/api-path";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import { Plus, Eye, EyeOff, Copy, Users } from "lucide-react";
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const token = localStorage.getItem("ems_token");
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...opts,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...opts?.headers },
   });

@@ -14,10 +14,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Search, Calendar as CalendarIcon, Plus, Pencil, AlertCircle, Download } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { apiUrl } from "@/lib/api-path";
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const token = localStorage.getItem("ems_token");
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...opts,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...opts?.headers },
   });
@@ -155,7 +156,7 @@ export default function AttendanceList() {
 
   async function exportCsv() {
     const token = localStorage.getItem("ems_token");
-    const res = await fetch(`/api/reports/attendance-csv?date=${date}`, {
+    const res = await fetch(apiUrl(`/reports/attendance-csv?date=${date}`), {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) { toast({ title: "Export failed", variant: "destructive" }); return; }
