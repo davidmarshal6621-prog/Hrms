@@ -1,0 +1,23 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "oBgG7QMrN3gEKpNEGYRMV"
+uri = "file://deployment/hrmslive-frontend.zip"
+type = "unspecified"
+title = "HRMS Frontend ZIP"
+description = "Production frontend configured for /hrmslive/ with SPA .htaccess. Extract the ZIP contents directly into public_html/hrmslive/."
+
+[[outputs]]
+id = "jbWhPJv-b3_igG2cz5qyf"
+uri = "file://deployment/hrmslive-cpanel-package.zip"
+type = "unspecified"
+title = "HRMS Complete cPanel Package"
+description = "Complete deployment package with frontend build, backend build, source code, environment template, and cPanel publish guide. No secrets included."
+
+[[outputs]]
+id = "lHtan3FK3oBdKv8JmMoRr"
+uri = "file://deployment/CPANEL_PUBLISH_GUIDE.md"
+type = "text"
+title = "HRMS cPanel Publish Guide"
+description = "Step-by-step instructions for frontend upload, PostgreSQL, Node.js API app, environment variables, updates, and ZKTeco networking."
