@@ -1,6 +1,14 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte } from "drizzle-orm";
-import { db, attendanceTable, employeesTable, shiftsTable, usersTable } from "@workspace/db";
+import {
+  db,
+  attendanceTable,
+  employeesTable,
+  shiftsTable,
+  usersTable,
+  employeeShiftAssignmentsTable,
+} from "@workspace/db";
+import { shiftIdForDate } from "../lib/shift-schedule.js";
 
 const router: IRouter = Router();
 
@@ -130,11 +138,20 @@ router.post("/attendance/zkteco", async (req, res): Promise<void> => {
 
       const [existing] = await db.select().from(attendanceTable)
         .where(and(eq(attendanceTable.employeeId, emp.id), eq(attendanceTable.date, dateStr)));
+      const [customAssignment] = await db.select({ shiftId: employeeShiftAssignmentsTable.shiftId })
+        .from(employeeShiftAssignmentsTable)
+        .where(and(
+          eq(employeeShiftAssignmentsTable.employeeId, emp.id),
+          eq(employeeShiftAssignmentsTable.assignmentDate, dateStr),
+        ));
+      const scheduledShiftId = customAssignment
+        ? customAssignment.shiftId
+        : shiftIdForDate(emp.weeklyShiftSchedule, dateStr, emp.shiftId);
 
       if (!existing) {
         let isLate = false;
-        if (emp.shiftId) {
-          const [shift] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, emp.shiftId));
+        if (scheduledShiftId) {
+          const [shift] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, scheduledShiftId));
           if (shift) {
             const [sh, sm] = shift.startTime.split(":").map(Number);
             const cutoff = new Date(punchTime);
@@ -150,8 +167,8 @@ router.post("/attendance/zkteco", async (req, res): Promise<void> => {
       } else if (existing.checkIn && !existing.checkOut) {
         const workingHours = calcWorkingHours(existing.checkIn, punchTime);
         let isEarlyOut = false;
-        if (emp.shiftId) {
-          const [shift] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, emp.shiftId));
+        if (scheduledShiftId) {
+          const [shift] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, scheduledShiftId));
           if (shift) {
             const [eh, em] = shift.endTime.split(":").map(Number);
             const shiftEnd = new Date(punchTime);

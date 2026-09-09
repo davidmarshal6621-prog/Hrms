@@ -1,12 +1,22 @@
 import { Router, type IRouter } from "express";
 import { eq, and, inArray } from "drizzle-orm";
-import { db, devicesTable, employeesTable, attendanceTable, shiftsTable, punchLogsTable, usersTable } from "@workspace/db";
+import {
+  db,
+  devicesTable,
+  employeesTable,
+  attendanceTable,
+  shiftsTable,
+  punchLogsTable,
+  usersTable,
+  employeeShiftAssignmentsTable,
+} from "@workspace/db";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import multer from "multer";
 import { getVerifyTypeName, getPunchDirection } from "./attendance.js";
 import { provisionEmployeeAccount } from "../lib/employee-provisioning.js";
+import { shiftIdForDate } from "../lib/shift-schedule.js";
 
 const router: IRouter = Router();
 const execFileAsync = promisify(execFile);
@@ -98,11 +108,26 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
   const records: Array<{ enrollNumber: string; timestamp: string; punch: number; status: number }> = parsed.records ?? [];
 
   // Load employees
-  const employees = await db.select({ id: employeesTable.id, enrollNumber: employeesTable.enrollNumber, shiftId: employeesTable.shiftId })
+  const employees = await db.select({
+    id: employeesTable.id,
+    enrollNumber: employeesTable.enrollNumber,
+    shiftId: employeesTable.shiftId,
+    weeklyShiftSchedule: employeesTable.weeklyShiftSchedule,
+  })
     .from(employeesTable);
-  const enrollMap = new Map<string, { id: number; shiftId: number | null }>();
+  const enrollMap = new Map<string, {
+    id: number;
+    shiftId: number | null;
+    weeklyShiftSchedule: string | null;
+  }>();
   for (const emp of employees) {
-    if (emp.enrollNumber) enrollMap.set(emp.enrollNumber, { id: emp.id, shiftId: emp.shiftId });
+    if (emp.enrollNumber) {
+      enrollMap.set(emp.enrollNumber, {
+        id: emp.id,
+        shiftId: emp.shiftId,
+        weeklyShiftSchedule: emp.weeklyShiftSchedule,
+      });
+    }
   }
 
   // Attendance may contain a new ZK enroll number before an explicit user
@@ -114,11 +139,29 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
     enrollMap.set(enrollNumber, {
       id: provisioned.employee.id,
       shiftId: provisioned.employee.shiftId,
+      weeklyShiftSchedule: provisioned.employee.weeklyShiftSchedule,
     });
   }
 
   const shifts = await db.select().from(shiftsTable);
   const shiftMap = new Map(shifts.map(s => [s.id, s]));
+  const employeeIds = [...new Set([...enrollMap.values()].map(employee => employee.id))];
+  const customAssignments = employeeIds.length
+    ? await db.select().from(employeeShiftAssignmentsTable)
+      .where(inArray(employeeShiftAssignmentsTable.employeeId, employeeIds))
+    : [];
+  const customShiftMap = new Map(
+    customAssignments.map(assignment => [
+      `${assignment.employeeId}:${assignment.assignmentDate}`,
+      assignment.shiftId,
+    ]),
+  );
+  function scheduledShiftId(employee: { id: number; shiftId: number | null; weeklyShiftSchedule: string | null }, date: string) {
+    const customKey = `${employee.id}:${date}`;
+    return customShiftMap.has(customKey)
+      ? customShiftMap.get(customKey) ?? null
+      : shiftIdForDate(employee.weeklyShiftSchedule, date, employee.shiftId);
+  }
 
   // ── Store all raw punches in punch_logs ──────────────────────────────────
   const punchLogsToInsert: any[] = [];
@@ -172,21 +215,28 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
 
     const punchHour = punchTime.getHours();
     let workDate = new Date(punchTime);
-    if (punchHour < 12 && emp.shiftId) {
-      const shift = shiftMap.get(emp.shiftId);
+    if (punchHour < 12) {
+      const initialDate = punchTime.toISOString().slice(0, 10);
+      const initialShiftId = scheduledShiftId(emp, initialDate);
+      const shift = initialShiftId ? shiftMap.get(initialShiftId) : undefined;
       if (shift) {
         const [sh] = shift.startTime.split(":").map(Number);
         if (sh >= 12) workDate.setDate(workDate.getDate() - 1);
       }
     }
     const dateStr = workDate.toISOString().slice(0, 10);
+    const scheduledShift = scheduledShiftId(emp, dateStr);
 
     const isCheckIn = rec.punch === 0 || rec.punch === 4;
     const isCheckOut = rec.punch === 1 || rec.punch === 5 || rec.punch === 255;
     if (!isCheckIn && !isCheckOut) continue;
 
     const key: DayKey = `${emp.id}:${dateStr}`;
-    const existing = dayMap.get(key) ?? { empId: emp.id, shiftId: emp.shiftId, date: dateStr };
+    const existing: DayAccum = dayMap.get(key) ?? {
+      empId: emp.id,
+      shiftId: scheduledShift,
+      date: dateStr,
+    };
     const verifyType = getVerifyTypeName(rec.status);
 
     if (isCheckIn) {

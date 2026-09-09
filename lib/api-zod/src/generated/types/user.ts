@@ -5,6 +5,7 @@
  * Employee Management System API
  * OpenAPI spec version: 0.1.0
  */
+import type { UserWeeklyShiftSchedule } from './userWeeklyShiftSchedule';
 
 export interface User {
   id: number;
@@ -34,6 +35,7 @@ export interface User {
   branchId?: number | null;
   /** @nullable */
   shiftId?: number | null;
+  weeklyShiftSchedule?: UserWeeklyShiftSchedule;
   /** @nullable */
   dateOfJoining?: string | null;
   /** @nullable */

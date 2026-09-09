@@ -73,6 +73,7 @@ export const ListUsersResponseItem = zod.object({
   "departmentId": zod.number().nullish(),
   "branchId": zod.number().nullish(),
   "shiftId": zod.number().nullish(),
+  "weeklyShiftSchedule": zod.record(zod.string(), zod.number().nullable()).optional(),
   "dateOfJoining": zod.string().nullish(),
   "basicSalary": zod.number().nullish(),
   "allowances": zod.number().nullish(),
@@ -107,6 +108,7 @@ export const CreateUserBody = zod.object({
   "departmentId": zod.number().nullish(),
   "branchId": zod.number().nullish(),
   "shiftId": zod.number().nullish(),
+  "weeklyShiftSchedule": zod.record(zod.string(), zod.number().nullable()).optional(),
   "designation": zod.string().optional(),
   "basicSalary": zod.number().optional()
 })
@@ -136,6 +138,7 @@ export const GetUserResponse = zod.object({
   "departmentId": zod.number().nullish(),
   "branchId": zod.number().nullish(),
   "shiftId": zod.number().nullish(),
+  "weeklyShiftSchedule": zod.record(zod.string(), zod.number().nullable()).optional(),
   "dateOfJoining": zod.string().nullish(),
   "basicSalary": zod.number().nullish(),
   "allowances": zod.number().nullish(),
@@ -176,6 +179,7 @@ export const UpdateUserBody = zod.object({
   "departmentId": zod.number().nullish(),
   "branchId": zod.number().nullish(),
   "shiftId": zod.number().nullish(),
+  "weeklyShiftSchedule": zod.record(zod.string(), zod.number().nullable()).optional(),
   "designation": zod.string().optional(),
   "basicSalary": zod.number().optional(),
   "allowances": zod.number().optional(),
@@ -208,6 +212,7 @@ export const UpdateUserResponse = zod.object({
   "departmentId": zod.number().nullish(),
   "branchId": zod.number().nullish(),
   "shiftId": zod.number().nullish(),
+  "weeklyShiftSchedule": zod.record(zod.string(), zod.number().nullable()).optional(),
   "dateOfJoining": zod.string().nullish(),
   "basicSalary": zod.number().nullish(),
   "allowances": zod.number().nullish(),
@@ -382,6 +387,7 @@ export const ListEmployeesResponseItem = zod.object({
   "branchId": zod.number().nullish(),
   "branchName": zod.string().nullish(),
   "shiftId": zod.number().nullish(),
+  "weeklyShiftSchedule": zod.record(zod.string(), zod.number().nullable()).optional(),
   "shiftName": zod.string().nullish(),
   "dateOfJoining": zod.string().nullish(),
   "basicSalary": zod.number().nullish(),
@@ -420,6 +426,7 @@ export const CreateEmployeeBody = zod.object({
   "departmentId": zod.number().nullish(),
   "branchId": zod.number().nullish(),
   "shiftId": zod.number().nullish(),
+  "weeklyShiftSchedule": zod.record(zod.string(), zod.number().nullable()).optional(),
   "dateOfJoining": zod.string().optional(),
   "basicSalary": zod.number().optional(),
   "allowances": zod.number().optional(),
@@ -473,6 +480,7 @@ export const GetEmployeeResponse = zod.object({
   "branchId": zod.number().nullish(),
   "branchName": zod.string().nullish(),
   "shiftId": zod.number().nullish(),
+  "weeklyShiftSchedule": zod.record(zod.string(), zod.number().nullable()).optional(),
   "shiftName": zod.string().nullish(),
   "dateOfJoining": zod.string().nullish(),
   "basicSalary": zod.number().nullish(),
@@ -513,6 +521,7 @@ export const UpdateEmployeeBody = zod.object({
   "departmentId": zod.number().nullish(),
   "branchId": zod.number().nullish(),
   "shiftId": zod.number().nullish(),
+  "weeklyShiftSchedule": zod.record(zod.string(), zod.number().nullable()).optional(),
   "dateOfJoining": zod.string().optional(),
   "basicSalary": zod.number().optional(),
   "allowances": zod.number().optional(),
@@ -547,6 +556,7 @@ export const UpdateEmployeeResponse = zod.object({
   "branchId": zod.number().nullish(),
   "branchName": zod.string().nullish(),
   "shiftId": zod.number().nullish(),
+  "weeklyShiftSchedule": zod.record(zod.string(), zod.number().nullable()).optional(),
   "shiftName": zod.string().nullish(),
   "dateOfJoining": zod.string().nullish(),
   "basicSalary": zod.number().nullish(),
@@ -575,6 +585,60 @@ export const UpdateEmployeeResponse = zod.object({
  */
 export const DeleteEmployeeParams = zod.object({
   "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Get a 30-day employee shift chart
+ */
+export const GetEmployeeShiftScheduleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const getEmployeeShiftScheduleQueryDaysMax = 30;
+
+
+
+export const GetEmployeeShiftScheduleQueryParams = zod.object({
+  "startDate": zod.date().optional(),
+  "days": zod.coerce.number().min(1).max(getEmployeeShiftScheduleQueryDaysMax).optional()
+})
+
+export const GetEmployeeShiftScheduleResponse = zod.object({
+  "employeeId": zod.number().optional(),
+  "startDate": zod.coerce.date().optional(),
+  "endDate": zod.coerce.date().optional(),
+  "days": zod.number().optional(),
+  "assignments": zod.array(zod.object({
+  "date": zod.coerce.date().optional(),
+  "dayOfWeek": zod.string().optional(),
+  "hasCustomAssignment": zod.boolean().optional(),
+  "customShiftId": zod.number().nullish(),
+  "shiftId": zod.number().nullish(),
+  "shiftName": zod.string().nullish(),
+  "source": zod.string().optional()
+})).optional()
+})
+
+
+/**
+ * @summary Replace a date-based employee shift chart
+ */
+export const UpdateEmployeeShiftScheduleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateEmployeeShiftScheduleBodyDaysMax = 30;
+
+
+
+export const UpdateEmployeeShiftScheduleBody = zod.object({
+  "startDate": zod.coerce.date(),
+  "days": zod.number().min(1).max(updateEmployeeShiftScheduleBodyDaysMax),
+  "assignments": zod.array(zod.object({
+  "date": zod.coerce.date(),
+  "shiftId": zod.number().nullable()
+}))
 })
 
 

@@ -446,6 +446,106 @@ paths:
         "204":
           description: Deleted
 
+  /employees/{id}/shift-schedule:
+    get:
+      operationId: getEmployeeShiftSchedule
+      tags: [employees]
+      summary: Get a 30-day employee shift chart
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: days
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        "200":
+          description: Employee shift chart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  employeeId:
+                    type: integer
+                  startDate:
+                    type: string
+                    format: date
+                  endDate:
+                    type: string
+                    format: date
+                  days:
+                    type: integer
+                  assignments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                        dayOfWeek:
+                          type: string
+                        hasCustomAssignment:
+                          type: boolean
+                        customShiftId:
+                          type: ["integer", "null"]
+                        shiftId:
+                          type: ["integer", "null"]
+                        shiftName:
+                          type: ["string", "null"]
+                        source:
+                          type: string
+    patch:
+      operationId: updateEmployeeShiftSchedule
+      tags: [employees]
+      summary: Replace a date-based employee shift chart
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startDate, days, assignments]
+              properties:
+                startDate:
+                  type: string
+                  format: date
+                days:
+                  type: integer
+                  minimum: 1
+                  maximum: 30
+                assignments:
+                  type: array
+                  items:
+                    type: object
+                    required: [date, shiftId]
+                    properties:
+                      date:
+                        type: string
+                        format: date
+                      shiftId:
+                        type: ["integer", "null"]
+      responses:
+        "200":
+          description: Shift chart saved
+
   /attendance:
     get:
       operationId: listAttendance
@@ -1155,6 +1255,10 @@ components:
           type: ["integer", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         dateOfJoining:
           type: ["string", "null"]
         basicSalary:
@@ -1212,6 +1316,10 @@ components:
           type: ["integer", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         designation:
           type: string
         basicSalary:
@@ -1248,6 +1356,10 @@ components:
           type: ["integer", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         designation:
           type: string
         basicSalary:
@@ -1395,6 +1507,10 @@ components:
           type: ["string", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         shiftName:
           type: ["string", "null"]
         dateOfJoining:
@@ -1456,6 +1572,10 @@ components:
           type: ["integer", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         dateOfJoining:
           type: string
         basicSalary:
@@ -1498,6 +1618,10 @@ components:
           type: ["integer", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         dateOfJoining:
           type: string
         basicSalary:

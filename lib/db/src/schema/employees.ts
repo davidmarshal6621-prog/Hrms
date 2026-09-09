@@ -14,6 +14,7 @@ export const employeesTable = pgTable("employees", {
   departmentId: integer("department_id"),
   branchId: integer("branch_id"),
   shiftId: integer("shift_id"),
+  weeklyShiftSchedule: text("weekly_shift_schedule"),
   dateOfJoining: date("date_of_joining", { mode: "string" }),
   basicSalary: real("basic_salary"),
   allowances: real("allowances").default(0),
