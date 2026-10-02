@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, date, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, date, timestamp, text, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const employeeShiftAssignmentsTable = pgTable(
   "employee_shift_assignments",
@@ -9,6 +9,8 @@ export const employeeShiftAssignmentsTable = pgTable(
     assignmentDate: date("assignment_date", { mode: "string" }).notNull(),
     // null means this employee is off on this date.
     shiftId: integer("shift_id"),
+    customStartTime: text("custom_start_time"),
+    customEndTime: text("custom_end_time"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },

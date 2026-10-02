@@ -204,7 +204,8 @@ router.get("/employees/:id/shift-schedule", async (req, res): Promise<void> => {
     const date = addDays(startDate, index);
     const custom = customMap.get(date);
     const weeklyShiftId = shiftIdForDate(weekly, date, employee.shiftId);
-    const effectiveShiftId = custom ? custom.shiftId : weeklyShiftId;
+    const hasCustomTimes = Boolean(custom?.customStartTime && custom?.customEndTime);
+    const effectiveShiftId = custom ? (hasCustomTimes ? null : custom.shiftId) : weeklyShiftId;
     const effectiveShift = effectiveShiftId ? shiftMap.get(effectiveShiftId) : undefined;
 
     return {
@@ -212,9 +213,15 @@ router.get("/employees/:id/shift-schedule", async (req, res): Promise<void> => {
       dayOfWeek: WEEKDAY_KEYS[new Date(`${date}T12:00:00Z`).getUTCDay()],
       hasCustomAssignment: Boolean(custom),
       customShiftId: custom ? custom.shiftId : undefined,
+      customStartTime: hasCustomTimes ? custom?.customStartTime : null,
+      customEndTime: hasCustomTimes ? custom?.customEndTime : null,
       shiftId: effectiveShiftId,
-      shiftName: effectiveShift?.name ?? null,
-      source: custom ? (custom.shiftId === null ? "custom-off" : "custom") : "default",
+      shiftName: hasCustomTimes
+        ? `Custom ${custom?.customStartTime}-${custom?.customEndTime}`
+        : effectiveShift?.name ?? null,
+      source: hasCustomTimes
+        ? "custom-times"
+        : custom ? (custom.shiftId === null ? "custom-off" : "custom") : "default",
     };
   });
 
@@ -238,7 +245,11 @@ router.patch("/employees/:id/shift-schedule", async (req, res): Promise<void> =>
     return;
   }
   const endDate = addDays(startDate, days - 1);
-  const uniqueAssignments = new Map<string, number | null>();
+  const uniqueAssignments = new Map<string, {
+    shiftId: number | null;
+    customStartTime: string | null;
+    customEndTime: string | null;
+  }>();
 
   for (const assignment of assignments) {
     const date = assignment?.date;
@@ -247,11 +258,25 @@ router.patch("/employees/:id/shift-schedule", async (req, res): Promise<void> =>
       res.status(400).json({ error: "Each assignment date must be inside the selected range" });
       return;
     }
-    if (shiftId !== null && (!Number.isInteger(shiftId) || shiftId <= 0)) {
-      res.status(400).json({ error: "shiftId must be a positive integer or null for an off day" });
-      return;
+    const customStartTime = assignment?.customStartTime;
+    const customEndTime = assignment?.customEndTime;
+    if (customStartTime !== undefined || customEndTime !== undefined) {
+      if (
+        typeof customStartTime !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(customStartTime)
+        || typeof customEndTime !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(customEndTime)
+        || customStartTime === customEndTime
+      ) {
+        res.status(400).json({ error: "Custom shifts require different, valid start and end times" });
+        return;
+      }
+      uniqueAssignments.set(date, { shiftId: null, customStartTime, customEndTime });
+    } else {
+      if (shiftId !== null && (!Number.isInteger(shiftId) || shiftId <= 0)) {
+        res.status(400).json({ error: "shiftId must be a positive integer or null for an off day" });
+        return;
+      }
+      uniqueAssignments.set(date, { shiftId, customStartTime: null, customEndTime: null });
     }
-    uniqueAssignments.set(date, shiftId);
   }
 
   await db.delete(employeeShiftAssignmentsTable).where(and(
@@ -262,10 +287,10 @@ router.patch("/employees/:id/shift-schedule", async (req, res): Promise<void> =>
 
   if (uniqueAssignments.size > 0) {
     await db.insert(employeeShiftAssignmentsTable).values(
-      [...uniqueAssignments.entries()].map(([assignmentDate, shiftId]) => ({
+      [...uniqueAssignments.entries()].map(([assignmentDate, assignment]) => ({
         employeeId: id,
         assignmentDate,
-        shiftId,
+        ...assignment,
       })),
     );
   }

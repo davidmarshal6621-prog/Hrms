@@ -19,6 +19,8 @@ type ChartAssignment = {
   dayOfWeek: string;
   hasCustomAssignment: boolean;
   customShiftId?: number | null;
+  customStartTime?: string | null;
+  customEndTime?: string | null;
   shiftId: number | null;
   shiftName: string | null;
   source: string;
@@ -67,7 +69,8 @@ export function EmployeeShiftChart({
     if (!scheduleQuery.data) return;
     const next: Record<string, string> = {};
     for (const assignment of scheduleQuery.data.assignments) {
-      next[assignment.date] = assignment.hasCustomAssignment
+      next[assignment.customStartTime && assignment.customEndTime ? "custom" : assignment.date] =
+        assignment.customStartTime && assignment.customEndTime ? "custom" : assignment.hasCustomAssignment
         ? assignment.customShiftId === null ? "off" : String(assignment.customShiftId)
         : "default";
     }

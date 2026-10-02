@@ -138,26 +138,35 @@ router.post("/attendance/zkteco", async (req, res): Promise<void> => {
 
       const [existing] = await db.select().from(attendanceTable)
         .where(and(eq(attendanceTable.employeeId, emp.id), eq(attendanceTable.date, dateStr)));
-      const [customAssignment] = await db.select({ shiftId: employeeShiftAssignmentsTable.shiftId })
-        .from(employeeShiftAssignmentsTable)
+      const [customAssignment] = await db.select().from(employeeShiftAssignmentsTable)
         .where(and(
           eq(employeeShiftAssignmentsTable.employeeId, emp.id),
           eq(employeeShiftAssignmentsTable.assignmentDate, dateStr),
         ));
-      const scheduledShiftId = customAssignment
-        ? customAssignment.shiftId
-        : shiftIdForDate(emp.weeklyShiftSchedule, dateStr, emp.shiftId);
+      let scheduledShift: { startTime: string; endTime: string; gracePeriodMinutes: number } | undefined;
+      if (customAssignment?.customStartTime && customAssignment.customEndTime) {
+        scheduledShift = {
+          startTime: customAssignment.customStartTime,
+          endTime: customAssignment.customEndTime,
+          gracePeriodMinutes: 15,
+        };
+      } else {
+        const scheduledShiftId = customAssignment
+          ? customAssignment.shiftId
+          : shiftIdForDate(emp.weeklyShiftSchedule, dateStr, emp.shiftId);
+        if (scheduledShiftId) {
+          const [shift] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, scheduledShiftId));
+          scheduledShift = shift;
+        }
+      }
 
       if (!existing) {
         let isLate = false;
-        if (scheduledShiftId) {
-          const [shift] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, scheduledShiftId));
-          if (shift) {
-            const [sh, sm] = shift.startTime.split(":").map(Number);
-            const cutoff = new Date(punchTime);
-            cutoff.setHours(sh, sm + shift.gracePeriodMinutes, 0, 0);
-            isLate = punchTime > cutoff;
-          }
+        if (scheduledShift) {
+          const [sh, sm] = scheduledShift.startTime.split(":").map(Number);
+          const cutoff = new Date(punchTime);
+          cutoff.setHours(sh, sm + scheduledShift.gracePeriodMinutes, 0, 0);
+          isLate = punchTime > cutoff;
         }
         await db.insert(attendanceTable).values({
           employeeId: emp.id, date: dateStr, checkIn: punchTime,
@@ -167,14 +176,11 @@ router.post("/attendance/zkteco", async (req, res): Promise<void> => {
       } else if (existing.checkIn && !existing.checkOut) {
         const workingHours = calcWorkingHours(existing.checkIn, punchTime);
         let isEarlyOut = false;
-        if (scheduledShiftId) {
-          const [shift] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, scheduledShiftId));
-          if (shift) {
-            const [eh, em] = shift.endTime.split(":").map(Number);
-            const shiftEnd = new Date(punchTime);
-            shiftEnd.setHours(eh, em, 0, 0);
-            isEarlyOut = punchTime < shiftEnd;
-          }
+        if (scheduledShift) {
+          const [eh, em] = scheduledShift.endTime.split(":").map(Number);
+          const shiftEnd = new Date(punchTime);
+          shiftEnd.setHours(eh, em, 0, 0);
+          isEarlyOut = punchTime < shiftEnd;
         }
         await db.update(attendanceTable)
           .set({ checkOut: punchTime, workingHours, isEarlyOut, checkOutVerifyType: verifyType })
@@ -190,13 +196,27 @@ router.get("/attendance", async (req, res): Promise<void> => {
     employeeId?: string; date?: string; startDate?: string; endDate?: string; status?: string;
   };
 
-  let records = await db.select().from(attendanceTable).orderBy(attendanceTable.date);
+  const isoDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime())
+    && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+  if ((date && !isoDate(date)) || (startDate && !isoDate(startDate)) || (endDate && !isoDate(endDate))) {
+    res.status(400).json({ error: "Use valid dates in YYYY-MM-DD format" });
+    return;
+  }
+  if (startDate && endDate && startDate > endDate) {
+    res.status(400).json({ error: "startDate cannot be after endDate" });
+    return;
+  }
 
-  if (employeeId) records = records.filter(r => r.employeeId === parseInt(employeeId, 10));
-  if (date) records = records.filter(r => r.date === date);
-  if (startDate) records = records.filter(r => r.date >= startDate);
-  if (endDate) records = records.filter(r => r.date <= endDate);
-  if (status) records = records.filter(r => r.status === status);
+  const conditions = [];
+  if (employeeId) conditions.push(eq(attendanceTable.employeeId, Number(employeeId)));
+  if (date) conditions.push(eq(attendanceTable.date, date));
+  if (startDate) conditions.push(gte(attendanceTable.date, startDate));
+  if (endDate) conditions.push(lte(attendanceTable.date, endDate));
+  if (status) conditions.push(eq(attendanceTable.status, status));
+  const records = await db.select().from(attendanceTable)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(attendanceTable.date);
 
   const employees = await db.select({
     id: employeesTable.id, firstName: employeesTable.firstName,

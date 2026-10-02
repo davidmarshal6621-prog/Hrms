@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Response } from "express";
 import { eq, and, inArray } from "drizzle-orm";
 import {
   db,
@@ -10,7 +10,7 @@ import {
   usersTable,
   employeeShiftAssignmentsTable,
 } from "@workspace/db";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { isIP } from "node:net";
 import { promisify } from "node:util";
 import path from "node:path";
@@ -18,6 +18,7 @@ import multer from "multer";
 import { getVerifyTypeName, getPunchDirection } from "./attendance.js";
 import { provisionEmployeeAccount } from "../lib/employee-provisioning.js";
 import { shiftIdForDate } from "../lib/shift-schedule.js";
+import type { AuthRequest } from "../middlewares/auth.js";
 
 const router: IRouter = Router();
 const execFileAsync = promisify(execFile);
@@ -40,6 +41,62 @@ function isPublicDeviceAddress(ip: string): boolean {
 
 function validPort(port: unknown): port is number {
   return Number.isInteger(port) && (port as number) >= 1 && (port as number) <= 65535;
+}
+
+function requireMachineAdmin(req: AuthRequest, res: Response): boolean {
+  if (req.user?.role !== "super_admin" && req.user?.role !== "admin") {
+    res.status(403).json({ error: "Only company admins can change machine settings" });
+    return false;
+  }
+  return true;
+}
+
+function runZkCommand(
+  ip: string,
+  port: number,
+  mode: "--set-time" | "--add-user",
+  data: Record<string, string>,
+): Promise<Record<string, any>> {
+  const scriptPath = path.resolve(process.cwd(), "zk_sync.py");
+  return new Promise((resolve, reject) => {
+    const child = spawn("python3", [scriptPath, ip, String(port), mode], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, 30000);
+
+    child.stdout.setEncoding("utf8").on("data", chunk => { stdout += chunk; });
+    child.stderr.setEncoding("utf8").on("data", chunk => { stderr += chunk; });
+    child.on("error", error => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", code => {
+      clearTimeout(timeout);
+      if (timedOut) {
+        reject(new Error("ZKTeco command timed out"));
+        return;
+      }
+      let result: Record<string, any>;
+      try {
+        result = JSON.parse(stdout);
+      } catch {
+        reject(new Error(stderr.trim() || "Invalid response from ZKTeco script"));
+        return;
+      }
+      if (code !== 0 || result.error) {
+        reject(new Error(result.error || stderr.trim() || "ZKTeco command failed"));
+        return;
+      }
+      resolve(result);
+    });
+    child.stdin.end(JSON.stringify(data));
+  });
 }
 
 function fmtDevice(d: typeof devicesTable.$inferSelect) {
@@ -188,16 +245,24 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
       .where(inArray(employeeShiftAssignmentsTable.employeeId, employeeIds))
     : [];
   const customShiftMap = new Map(
-    customAssignments.map(assignment => [
-      `${assignment.employeeId}:${assignment.assignmentDate}`,
-      assignment.shiftId,
-    ]),
+    customAssignments.map(assignment => [`${assignment.employeeId}:${assignment.assignmentDate}`, assignment]),
   );
-  function scheduledShiftId(employee: { id: number; shiftId: number | null; weeklyShiftSchedule: string | null }, date: string) {
-    const customKey = `${employee.id}:${date}`;
-    return customShiftMap.has(customKey)
-      ? customShiftMap.get(customKey) ?? null
-      : shiftIdForDate(employee.weeklyShiftSchedule, date, employee.shiftId);
+  function scheduledShift(employee: { id: number; shiftId: number | null; weeklyShiftSchedule: string | null }, date: string) {
+    const custom = customShiftMap.get(`${employee.id}:${date}`);
+    if (custom) {
+      if (custom.customStartTime && custom.customEndTime) {
+        return {
+          shiftId: null,
+          startTime: custom.customStartTime,
+          endTime: custom.customEndTime,
+          gracePeriodMinutes: 15,
+        };
+      }
+      if (custom.shiftId === null) return undefined;
+      return shiftMap.get(custom.shiftId);
+    }
+    const shiftId = shiftIdForDate(employee.weeklyShiftSchedule, date, employee.shiftId);
+    return shiftId ? shiftMap.get(shiftId) : undefined;
   }
 
   // ── Store all raw punches in punch_logs ──────────────────────────────────
@@ -234,7 +299,8 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
   // ── Group records by employee+date, keep earliest check-in & latest check-out ──
   type DayKey = string;
   type DayAccum = {
-    empId: number; shiftId: number | null; date: string;
+    empId: number; date: string;
+    shiftStartTime?: string; shiftEndTime?: string; shiftGracePeriodMinutes?: number;
     checkIn?: Date; checkOut?: Date;
     checkInDeviceId?: number; checkInDeviceName?: string; checkInVerifyType?: string;
     checkOutDeviceId?: number; checkOutDeviceName?: string; checkOutVerifyType?: string;
@@ -254,15 +320,14 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
     let workDate = new Date(punchTime);
     if (punchHour < 12) {
       const initialDate = punchTime.toISOString().slice(0, 10);
-      const initialShiftId = scheduledShiftId(emp, initialDate);
-      const shift = initialShiftId ? shiftMap.get(initialShiftId) : undefined;
+      const shift = scheduledShift(emp, initialDate);
       if (shift) {
         const [sh] = shift.startTime.split(":").map(Number);
         if (sh >= 12) workDate.setDate(workDate.getDate() - 1);
       }
     }
     const dateStr = workDate.toISOString().slice(0, 10);
-    const scheduledShift = scheduledShiftId(emp, dateStr);
+    const shift = scheduledShift(emp, dateStr);
 
     const isCheckIn = rec.punch === 0 || rec.punch === 4;
     const isCheckOut = rec.punch === 1 || rec.punch === 5 || rec.punch === 255;
@@ -271,8 +336,10 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
     const key: DayKey = `${emp.id}:${dateStr}`;
     const existing: DayAccum = dayMap.get(key) ?? {
       empId: emp.id,
-      shiftId: scheduledShift,
       date: dateStr,
+      shiftStartTime: shift?.startTime,
+      shiftEndTime: shift?.endTime,
+      shiftGracePeriodMinutes: shift?.gracePeriodMinutes,
     };
     const verifyType = getVerifyTypeName(rec.status);
 
@@ -309,18 +376,17 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
 
   for (const [, day] of dayMap) {
     const existing = existingMap.get(`${day.empId}:${day.date}`);
-    const shift = day.shiftId ? shiftMap.get(day.shiftId) : undefined;
 
     function calcLate(checkIn: Date): boolean {
-      if (!shift) return false;
-      const [sh, sm] = shift.startTime.split(":").map(Number);
+      if (!day.shiftStartTime) return false;
+      const [sh, sm] = day.shiftStartTime.split(":").map(Number);
       const cutoff = new Date(checkIn);
-      cutoff.setHours(sh, sm + shift.gracePeriodMinutes, 0, 0);
+      cutoff.setHours(sh, sm + (day.shiftGracePeriodMinutes ?? 15), 0, 0);
       return checkIn > cutoff;
     }
     function calcEarlyOut(checkOut: Date): boolean {
-      if (!shift) return false;
-      const [eh, em] = shift.endTime.split(":").map(Number);
+      if (!day.shiftEndTime) return false;
+      const [eh, em] = day.shiftEndTime.split(":").map(Number);
       const cutoff = new Date(checkOut);
       cutoff.setHours(eh, em, 0, 0);
       return checkOut < cutoff;
@@ -465,6 +531,80 @@ router.post("/devices/:id/import-users", async (req, res): Promise<void> => {
     // Return first 10 so admin can see them
     sampleCredentials: createdUsers.slice(0, 10),
   });
+});
+
+router.post("/devices/:id/set-time", async (req: AuthRequest, res): Promise<void> => {
+  if (!requireMachineAdmin(req, res)) return;
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const { dateTime } = req.body as { dateTime?: string };
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid device ID" }); return; }
+  if (
+    typeof dateTime !== "string"
+    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateTime)
+    || Number.isNaN(new Date(dateTime).getTime())
+  ) {
+    res.status(400).json({ error: "dateTime must be a valid local date and time" });
+    return;
+  }
+
+  const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, id));
+  if (!device) { res.status(404).json({ error: "Device not found" }); return; }
+  if (!isPublicDeviceAddress(device.ip) || !validPort(device.port)) {
+    res.status(400).json({ error: "Device must use a public IPv4 address reachable from the API server" });
+    return;
+  }
+
+  try {
+    const result = await runZkCommand(device.ip, device.port, "--set-time", { dateTime });
+    res.json({ success: true, deviceDateTime: result.deviceDateTime });
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "Could not set machine time" });
+  }
+});
+
+router.post("/devices/:id/users", async (req: AuthRequest, res): Promise<void> => {
+  if (!requireMachineAdmin(req, res)) return;
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const employeeId = Number(req.body?.employeeId);
+  const userId = String(req.body?.userId ?? "").trim();
+  const name = String(req.body?.name ?? "").trim();
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid device ID" }); return; }
+  if (!Number.isInteger(employeeId) || employeeId <= 0) { res.status(400).json({ error: "Select an employee" }); return; }
+  if (!/^\d{1,9}$/.test(userId)) { res.status(400).json({ error: "Machine user ID must contain 1 to 9 digits" }); return; }
+  if (!name || name.length > 24) {
+    res.status(400).json({ error: "Machine display name must contain 1 to 24 characters" });
+    return;
+  }
+
+  const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, id));
+  if (!device) { res.status(404).json({ error: "Device not found" }); return; }
+  if (!isPublicDeviceAddress(device.ip) || !validPort(device.port)) {
+    res.status(400).json({ error: "Device must use a public IPv4 address reachable from the API server" });
+    return;
+  }
+
+  const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, employeeId));
+  if (!employee) { res.status(404).json({ error: "Employee not found" }); return; }
+  if (employee.enrollNumber && employee.enrollNumber !== userId) {
+    res.status(409).json({ error: `This employee is already mapped to machine ID ${employee.enrollNumber}` });
+    return;
+  }
+  const [existingMapping] = await db.select({ id: employeesTable.id }).from(employeesTable)
+    .where(eq(employeesTable.enrollNumber, userId));
+  if (existingMapping && existingMapping.id !== employee.id) {
+    res.status(409).json({ error: "This machine user ID is already mapped to another employee" });
+    return;
+  }
+
+  try {
+    const result = await runZkCommand(device.ip, device.port, "--add-user", { userId, name });
+    if (!employee.enrollNumber) {
+      await db.update(employeesTable).set({ enrollNumber: userId }).where(eq(employeesTable.id, employee.id));
+    }
+    res.json({ success: true, userId, name: result.name, updated: false });
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "Could not add machine user" });
+  }
 });
 
 // ─── Test Device Connection ───────────────────────────────────────────────────

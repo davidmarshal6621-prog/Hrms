@@ -9,6 +9,8 @@ Outputs JSON to stdout.
 """
 import sys
 import json
+import re
+from datetime import datetime
 
 def main():
     if len(sys.argv) < 3:
@@ -19,6 +21,16 @@ def main():
     port = int(sys.argv[2])
     fetch_users = "--users" in sys.argv
     test_connection = "--test" in sys.argv
+    set_device_time = "--set-time" in sys.argv
+    add_device_user = "--add-user" in sys.argv
+
+    operation_data = {}
+    if set_device_time or add_device_user:
+        try:
+            operation_data = json.load(sys.stdin)
+        except Exception:
+            print(json.dumps({"error": "Operation input must be valid JSON"}))
+            sys.exit(1)
 
     try:
         from zk import ZK
@@ -42,7 +54,42 @@ def main():
                 "serialNumber": conn.get_serialnumber(),
                 "firmwareVersion": conn.get_firmware_version(),
             }
-        else:
+        elif set_device_time:
+            value = operation_data.get("dateTime", "")
+            try:
+                timestamp = datetime.strptime(value, "%Y-%m-%dT%H:%M")
+            except (TypeError, ValueError):
+                raise ValueError("Date/time must use YYYY-MM-DDTHH:MM")
+            conn.set_time(timestamp)
+            result = {"success": True, "deviceDateTime": value}
+        elif add_device_user:
+            user_id = str(operation_data.get("userId", "")).strip()
+            name = str(operation_data.get("name", "")).strip()
+            if not re.fullmatch(r"\d{1,9}", user_id):
+                raise ValueError("Machine user ID must contain 1 to 9 digits")
+            if not name or len(name) > 24:
+                raise ValueError("Name must contain 1 to 24 characters")
+            users = conn.get_users()
+            existing = next((user for user in users if str(user.user_id) == user_id), None)
+            if existing:
+                raise ValueError(f"Machine user ID {user_id} already exists")
+            uid = conn.next_uid
+            conn.set_user(
+                uid=uid,
+                user_id=user_id,
+                name=name,
+                privilege=0,
+                password="",
+                group_id="",
+                card=0,
+            )
+            result = {
+                "success": True,
+                "userId": user_id,
+                "name": name,
+                "updated": existing is not None,
+            }
+        elif not fetch_users:
             conn.disable_device()
             device_disabled = True
 
