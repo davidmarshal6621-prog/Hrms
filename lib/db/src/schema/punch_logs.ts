@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 // Stores every raw punch event from ZKTeco devices (multiple punches per day per employee)
 export const punchLogsTable = pgTable("punch_logs", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   employeeId: integer("employee_id"),           // null if enroll number not matched yet
   enrollNumber: text("enroll_number").notNull(), // device user ID
   deviceId: integer("device_id"),

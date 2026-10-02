@@ -11,6 +11,7 @@ import {
   employeeShiftAssignmentsTable,
 } from "@workspace/db";
 import { execFile } from "node:child_process";
+import { isIP } from "node:net";
 import { promisify } from "node:util";
 import path from "node:path";
 import multer from "multer";
@@ -21,6 +22,25 @@ import { shiftIdForDate } from "../lib/shift-schedule.js";
 const router: IRouter = Router();
 const execFileAsync = promisify(execFile);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+function isPublicDeviceAddress(ip: string): boolean {
+  if (typeof ip !== "string" || isIP(ip) !== 4) return false;
+  const [a, b] = ip.split(".").map(Number);
+  return !(
+    a === 0 || a === 10 || a === 127 || a >= 224
+    || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 168)
+    || (a === 100 && b >= 64 && b <= 127)
+    || (a === 192 && b === 0)
+    || (a === 198 && (b === 18 || b === 19 || b === 51))
+    || (a === 203 && b === 0)
+  );
+}
+
+function validPort(port: unknown): port is number {
+  return Number.isInteger(port) && (port as number) >= 1 && (port as number) <= 65535;
+}
 
 function fmtDevice(d: typeof devicesTable.$inferSelect) {
   return {
@@ -42,7 +62,12 @@ router.get("/devices", async (_req, res): Promise<void> => {
 router.post("/devices", async (req, res): Promise<void> => {
   const { name, ip, port, location } = req.body;
   if (!name || !ip) { res.status(400).json({ error: "name and ip required" }); return; }
-  const [device] = await db.insert(devicesTable).values({ name, ip, port: port ?? 4370, location }).returning();
+  const devicePort = port ?? 4370;
+  if (!isPublicDeviceAddress(ip) || !validPort(devicePort)) {
+    res.status(400).json({ error: "Use a public IPv4 address and a valid device port reachable from the API server" });
+    return;
+  }
+  const [device] = await db.insert(devicesTable).values({ name, ip, port: devicePort, location }).returning();
   res.status(201).json(fmtDevice(device));
 });
 
@@ -55,6 +80,14 @@ router.patch("/devices/:id", async (req, res): Promise<void> => {
   if (port !== undefined) updates.port = port;
   if (location !== undefined) updates.location = location;
   if (isActive !== undefined) updates.isActive = isActive;
+  if (ip !== undefined && !isPublicDeviceAddress(ip)) {
+    res.status(400).json({ error: "Use a public IPv4 address reachable from the API server" });
+    return;
+  }
+  if (port !== undefined && !validPort(port)) {
+    res.status(400).json({ error: "Port must be between 1 and 65535" });
+    return;
+  }
   const [device] = await db.update(devicesTable).set(updates).where(eq(devicesTable.id, id)).returning();
   if (!device) { res.status(404).json({ error: "Device not found" }); return; }
   res.json(fmtDevice(device));
@@ -73,6 +106,10 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
 
   const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, id));
   if (!device) { res.status(404).json({ error: "Device not found" }); return; }
+  if (!isPublicDeviceAddress(device.ip) || !validPort(device.port)) {
+    res.status(400).json({ error: "Device must use a public IPv4 address reachable from the API server" });
+    return;
+  }
 
   const scriptPath = path.resolve(process.cwd(), "zk_sync.py");
 
@@ -365,6 +402,10 @@ router.post("/devices/:id/import-users", async (req, res): Promise<void> => {
 
   const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, id));
   if (!device) { res.status(404).json({ error: "Device not found" }); return; }
+  if (!isPublicDeviceAddress(device.ip) || !validPort(device.port)) {
+    res.status(400).json({ error: "Device must use a public IPv4 address reachable from the API server" });
+    return;
+  }
 
   const scriptPath = path.resolve(process.cwd(), "zk_sync.py");
   let rawResult = "";
@@ -431,16 +472,31 @@ router.post("/devices/:id/import-users", async (req, res): Promise<void> => {
 router.post("/devices/test-connection", async (req, res): Promise<void> => {
   const { ip, port } = req.body;
   if (!ip) { res.status(400).json({ error: "ip required" }); return; }
+  const devicePort = port ?? 4370;
+  if (!isPublicDeviceAddress(ip) || !validPort(devicePort)) {
+    res.status(400).json({ connected: false, error: "Use a public IPv4 address and a valid device port reachable from the API server" });
+    return;
+  }
   const scriptPath = path.resolve(process.cwd(), "zk_sync.py");
   try {
-    const { stdout } = await execFileAsync("python3", [scriptPath, ip, String(port ?? 4370)], {
-      timeout: 20000,
+    const { stdout } = await execFileAsync("python3", [scriptPath, ip, String(devicePort), "--test"], {
+      timeout: 30000,
+      maxBuffer: 1024 * 1024,
     });
     const p = JSON.parse(stdout);
     if (p.error) { res.status(400).json({ connected: false, error: p.error }); }
-    else { res.json({ connected: true, recordCount: p.count }); }
+    else {
+      res.json({
+        connected: true,
+        deviceName: p.deviceName || null,
+        serialNumber: p.serialNumber || null,
+        firmwareVersion: p.firmwareVersion || null,
+      });
+    }
   } catch (err: any) {
-    res.status(400).json({ connected: false, error: err.message });
+    let detail = err.stdout || err.message;
+    try { detail = JSON.parse(detail).error || detail; } catch { /* retain script's error text */ }
+    res.status(400).json({ connected: false, error: String(detail).slice(0, 500) });
   }
 });
 

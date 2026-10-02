@@ -14,11 +14,13 @@ import devicesRouter from "./devices";
 import reportsRouter from "./reports";
 import companySettingsRouter from "./company-settings";
 import punchLogsRouter from "./punch-logs";
+import { requireAuth } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(requireAuth);
 router.use(usersRouter);
 router.use(branchesRouter);
 router.use(departmentsRouter);

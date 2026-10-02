@@ -61,6 +61,7 @@ export * from './punchLog';
 export * from './shift';
 export * from './shiftInput';
 export * from './shiftUpdate';
+export * from './signupInput';
 export * from './updateEmployeeShiftScheduleBody';
 export * from './updateEmployeeShiftScheduleBodyAssignmentsItem';
 export * from './user';

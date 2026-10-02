@@ -57,7 +57,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">E</div>
             <div>
               <div className="font-bold text-sm leading-tight">EMS Portal</div>
-              <div className="text-xs text-sidebar-foreground/50">Employee Management</div>
+              <div className="text-xs text-sidebar-foreground/50 truncate max-w-44" title={user?.tenantName ?? "Employee Management"}>
+                {user?.tenantName ?? "Employee Management"}
+              </div>
             </div>
           </div>
         </div>

@@ -60,6 +60,29 @@ paths:
         "401":
           description: Invalid credentials
 
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [auth]
+      summary: Create a company workspace and its administrator account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupInput"
+      responses:
+        "201":
+          description: Company workspace created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid signup details
+        "409":
+          description: Email already registered
+
   /auth/logout:
     post:
       operationId: logout
@@ -1195,6 +1218,23 @@ components:
         password:
           type: string
 
+    SignupInput:
+      type: object
+      required: [companyName, name, email, password]
+      properties:
+        companyName:
+          type: string
+          minLength: 2
+        name:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+
     AuthResponse:
       type: object
       required: [user, token]
@@ -1206,7 +1246,7 @@ components:
 
     UserProfile:
       type: object
-      required: [id, email, role, name]
+      required: [id, email, role, name, tenantId, tenantName]
       properties:
         id:
           type: integer
@@ -1218,6 +1258,10 @@ components:
           type: string
         employeeId:
           type: ["integer", "null"]
+        tenantId:
+          type: integer
+        tenantName:
+          type: string
 
     User:
       type: object

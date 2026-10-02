@@ -2,6 +2,7 @@ import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   tempPassword: text("temp_password"), // plain-text temp password shown to admin at creation

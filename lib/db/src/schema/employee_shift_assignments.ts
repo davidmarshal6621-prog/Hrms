@@ -4,6 +4,7 @@ export const employeeShiftAssignmentsTable = pgTable(
   "employee_shift_assignments",
   {
     id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id").notNull().default(1),
     employeeId: integer("employee_id").notNull(),
     assignmentDate: date("assignment_date", { mode: "string" }).notNull(),
     // null means this employee is off on this date.
@@ -13,7 +14,7 @@ export const employeeShiftAssignmentsTable = pgTable(
   },
   table => ({
     employeeDateUnique: uniqueIndex("employee_shift_assignments_employee_date_idx")
-      .on(table.employeeId, table.assignmentDate),
+      .on(table.tenantId, table.employeeId, table.assignmentDate),
   }),
 );
 

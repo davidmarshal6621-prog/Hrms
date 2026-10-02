@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { UserProfile, setAuthTokenGetter } from "@workspace/api-client-react";
 
 interface AuthContextType {
@@ -12,6 +13,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem("ems_user");
     return saved ? JSON.parse(saved) : null;
@@ -25,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = (newUser: UserProfile, newToken: string) => {
+    queryClient.removeQueries();
     setUser(newUser);
     setToken(newToken);
     localStorage.setItem("ems_user", JSON.stringify(newUser));
@@ -32,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    queryClient.removeQueries();
     setUser(null);
     setToken(null);
     localStorage.removeItem("ems_user");

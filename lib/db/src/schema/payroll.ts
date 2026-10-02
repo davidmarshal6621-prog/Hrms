@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const payrollTable = pgTable("payroll", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   employeeId: integer("employee_id").notNull(),
   month: integer("month").notNull(), // 1-12
   year: integer("year").notNull(),

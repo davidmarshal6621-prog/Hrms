@@ -30,9 +30,30 @@ export const LoginResponse = zod.object({
   "email": zod.string(),
   "name": zod.string(),
   "role": zod.string(),
-  "employeeId": zod.number().nullish()
+  "employeeId": zod.number().nullish(),
+  "tenantId": zod.number(),
+  "tenantName": zod.string()
 }),
   "token": zod.string()
+})
+
+
+/**
+ * @summary Create a company workspace and its administrator account
+ */
+export const signupBodyCompanyNameMin = 2;
+
+export const signupBodyNameMin = 2;
+
+export const signupBodyPasswordMin = 8;
+
+
+
+export const SignupBody = zod.object({
+  "companyName": zod.string().min(signupBodyCompanyNameMin),
+  "name": zod.string().min(signupBodyNameMin),
+  "email": zod.string().email(),
+  "password": zod.string().min(signupBodyPasswordMin)
 })
 
 
@@ -44,7 +65,9 @@ export const GetCurrentUserResponse = zod.object({
   "email": zod.string(),
   "name": zod.string(),
   "role": zod.string(),
-  "employeeId": zod.number().nullish()
+  "employeeId": zod.number().nullish(),
+  "tenantId": zod.number(),
+  "tenantName": zod.string()
 })
 
 

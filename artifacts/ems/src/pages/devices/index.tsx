@@ -39,6 +39,8 @@ export default function DevicesPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [syncingId, setSyncingId] = useState<number | null>(null);
   const [importingId, setImportingId] = useState<number | null>(null);
+  const [testingId, setTestingId] = useState<number | null>(null);
+  const [testingForm, setTestingForm] = useState(false);
   const [syncLog, setSyncLog] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", ip: "", port: "4370", location: "" });
 
@@ -65,6 +67,36 @@ export default function DevicesPage() {
     mutationFn: (id: number) => apiFetch(`/devices/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["devices"] }); toast({ title: "Device removed" }); },
   });
+
+  async function handleConnectionTest(ip: string, port: number, deviceId?: number) {
+    if (deviceId === undefined) setTestingForm(true);
+    else setTestingId(deviceId);
+    setSyncLog(null);
+    try {
+      const result = await apiFetch("/devices/test-connection", {
+        method: "POST",
+        body: JSON.stringify({ ip, port }),
+      });
+      const details = [
+        result.deviceName && `Device: ${result.deviceName}`,
+        result.serialNumber && `Serial: ${result.serialNumber}`,
+        result.firmwareVersion && `Firmware: ${result.firmwareVersion}`,
+      ].filter(Boolean).join("\n");
+      setSyncLog(`✅ ZKTeco connection successful${details ? `\n${details}` : ""}`);
+      toast({ title: "Device connected", description: result.deviceName || `${ip}:${port}` });
+    } catch (error) {
+      let message = error instanceof Error ? error.message : "Connection test failed";
+      try {
+        const payload = JSON.parse(message);
+        message = payload.error || payload.detail || message;
+      } catch { /* show the original response text */ }
+      setSyncLog(`❌ Connection test failed: ${message}`);
+      toast({ title: "Connection failed", description: message, variant: "destructive" });
+    } finally {
+      setTestingForm(false);
+      setTestingId(null);
+    }
+  }
 
   async function handleImportUsers(device: Device) {
     setImportingId(device.id);
@@ -178,10 +210,11 @@ export default function DevicesPage() {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
         <strong>📋 Quick Setup Guide:</strong>
         <ol className="list-decimal list-inside mt-2 space-y-1">
-          <li><strong>Step 1:</strong> Click <strong>"Import Users from Device"</strong> → imports all 93 employees from your ZKTeco machine automatically.</li>
-          <li><strong>Step 2:</strong> Click <strong>"Sync Now"</strong> → downloads all historical attendance records (29,000+) and stores them in the database.</li>
-          <li><strong>Step 3:</strong> Check the Attendance page to see all records.</li>
+          <li><strong>Step 1:</strong> Add your machine's public IPv4 address and test the connection.</li>
+          <li><strong>Step 2:</strong> Use <strong>"Import Users"</strong> if you want to import enrolled employees from the device.</li>
+          <li><strong>Step 3:</strong> Click <strong>"Sync Now"</strong> to import attendance punches into this company workspace.</li>
         </ol>
+        <p className="mt-2">The machine must be reachable from the EMS server; a private office-network address is not reachable over the public internet.</p>
       </div>
 
       {/* Devices table */}
@@ -236,6 +269,16 @@ export default function DevicesPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => handleConnectionTest(device.ip, device.port, device.id)}
+                        disabled={testingId === device.id}
+                        className="flex items-center gap-1"
+                      >
+                        <Wifi className={`h-3.5 w-3.5 ${testingId === device.id ? "animate-pulse" : ""}`} />
+                        {testingId === device.id ? "Testing..." : "Test"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => handleImportUsers(device)}
                         disabled={importingId === device.id}
                         className="flex items-center gap-1 text-blue-600 border-blue-200 hover:bg-blue-50"
@@ -287,13 +330,16 @@ export default function DevicesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>IP Address</Label>
-                <Input placeholder="139.135.57.165" value={form.ip} onChange={e => setForm(f => ({ ...f, ip: e.target.value }))} />
+                  <Input placeholder="Public IPv4 address" value={form.ip} onChange={e => setForm(f => ({ ...f, ip: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Port</Label>
                 <Input type="number" placeholder="4370" value={form.port} onChange={e => setForm(f => ({ ...f, port: e.target.value }))} />
               </div>
             </div>
+            <p className="text-xs text-gray-500">
+              Enter the machine's public IPv4 address and port. Private LAN addresses cannot be reached by the hosted EMS server.
+            </p>
             <div className="space-y-1.5">
               <Label>Location <span className="text-gray-400">(optional)</span></Label>
               <Input placeholder="e.g. Ground Floor, Office A" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
@@ -301,6 +347,13 @@ export default function DevicesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button
+              variant="outline"
+              onClick={() => handleConnectionTest(form.ip, Number(form.port) || 4370)}
+              disabled={!form.ip || testingForm}
+            >
+              {testingForm ? "Testing..." : "Test Connection"}
+            </Button>
             <Button onClick={() => createMut.mutate(form)} disabled={!form.name || !form.ip || createMut.isPending}>
               {createMut.isPending ? "Adding..." : "Add Device"}
             </Button>

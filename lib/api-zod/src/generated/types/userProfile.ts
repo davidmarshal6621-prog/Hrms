@@ -13,4 +13,6 @@ export interface UserProfile {
   role: string;
   /** @nullable */
   employeeId?: number | null;
+  tenantId: number;
+  tenantName: string;
 }

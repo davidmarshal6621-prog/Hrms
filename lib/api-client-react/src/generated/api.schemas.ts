@@ -14,6 +14,16 @@ export interface LoginInput {
   password: string;
 }
 
+export interface SignupInput {
+  /** @minLength 2 */
+  companyName: string;
+  /** @minLength 2 */
+  name: string;
+  email: string;
+  /** @minLength 8 */
+  password: string;
+}
+
 export interface UserProfile {
   id: number;
   email: string;
@@ -21,6 +31,8 @@ export interface UserProfile {
   role: string;
   /** @nullable */
   employeeId?: number | null;
+  tenantId: number;
+  tenantName: string;
 }
 
 export interface AuthResponse {

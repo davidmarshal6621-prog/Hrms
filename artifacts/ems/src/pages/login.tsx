@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { Link } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useLogin } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,9 @@ export default function Login() {
             {loginMutation.isPending ? "Signing in..." : "Sign in"}
           </Button>
         </form>
+        <p className="text-sm text-center text-gray-500 mt-6">
+          New company? <Link href="/signup" className="font-medium text-blue-600 hover:underline">Create a workspace</Link>
+        </p>
       </div>
     </div>
   );

@@ -2,3 +2,4 @@
 - [PDF reports](pdf-reports.md) — pdfkit used for payslip PDF (externalized in esbuild); attendance uses plain CSV; both served as file downloads from `/api/reports/`
 - [esbuild externals](esbuild-externals.md) — add `pdfkit` to externals in `artifacts/api-server/build.mjs` for any pdfkit-like package with dynamic file loading
 - [OpenAPI Zod exports](api-zod-codegen.md) — inline request schemas can collide with generated TypeScript type exports; keep package barrel exports collision-safe
+- [EMS company isolation](ems-company-isolation.md) — each signup must be a separate company workspace, with tenant isolation enforced in server-side database access

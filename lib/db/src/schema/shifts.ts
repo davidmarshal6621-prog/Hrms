@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const shiftsTable = pgTable("shifts", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   name: text("name").notNull(),
   startTime: text("start_time").notNull(), // HH:MM
   endTime: text("end_time").notNull(), // HH:MM
