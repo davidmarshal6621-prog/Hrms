@@ -34,15 +34,18 @@ const queryClient = new QueryClient();
 setBaseUrl(apiBasePath || null);
 
 function ProtectedRoute({ component: Component, roles, ...rest }: any) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isSessionLoading, user } = useAuth();
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isAuthenticated && location !== "/login") {
+    if (!isSessionLoading && !isAuthenticated && location !== "/login") {
       setLocation("/login");
     }
-  }, [isAuthenticated, location, setLocation]);
+  }, [isAuthenticated, isSessionLoading, location, setLocation]);
 
+  if (isSessionLoading) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-gray-500">Checking your session…</div>;
+  }
   if (!isAuthenticated) return null;
   if (roles && !roles.includes(user?.role)) {
     return <div className="p-8 text-gray-500">You don't have permission to view this page.</div>;
