@@ -1,7 +1,5 @@
 export * from "./generated/api";
-// Keep the generated Zod schemas and TypeScript types available from one
-// package. The two inline shift-chart request schemas have the same names as
-// their generated TypeScript types, so they are exported with a Type suffix.
+// Keep generated Zod schemas and TypeScript types available from one package.
 export type {
   Attendance,
   AttendanceInput,
@@ -20,6 +18,8 @@ export type {
   EmployeeCvData,
   EmployeeInput,
   EmployeeInputWeeklyShiftSchedule,
+  EmployeeShiftAssignmentInput,
+  EmployeeShiftScheduleUpdate,
   EmployeeStats,
   EmployeeStatsByBranchItem,
   EmployeeStatsByDepartmentItem,
@@ -57,7 +57,6 @@ export type {
   Shift,
   ShiftInput,
   ShiftUpdate,
-  UpdateEmployeeShiftScheduleBodyAssignmentsItem,
   User,
   UserInput,
   UserInputWeeklyShiftSchedule,
@@ -71,6 +70,3 @@ export type {
 export type {
   GetEmployeeShiftScheduleParams as GetEmployeeShiftScheduleParamsType,
 } from "./generated/types/getEmployeeShiftScheduleParams";
-export type {
-  UpdateEmployeeShiftScheduleBody as UpdateEmployeeShiftScheduleBodyType,
-} from "./generated/types/updateEmployeeShiftScheduleBody";

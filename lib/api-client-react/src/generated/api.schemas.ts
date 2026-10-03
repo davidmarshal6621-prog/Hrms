@@ -429,6 +429,76 @@ export interface AttendanceUpdate {
   correctedBy?: string;
 }
 
+export interface EmployeeShiftAssignmentInput {
+  date: string;
+  /** @nullable */
+  shiftId: number | null;
+  /** @pattern ^(?:[01][0-9]|2[0-3]):[0-5][0-9]$ */
+  customStartTime?: string;
+  /** @pattern ^(?:[01][0-9]|2[0-3]):[0-5][0-9]$ */
+  customEndTime?: string;
+}
+
+export interface EmployeeShiftScheduleUpdate {
+  startDate: string;
+  /**
+     * @minimum 1
+     * @maximum 30
+     */
+  days: number;
+  assignments: EmployeeShiftAssignmentInput[];
+}
+
+export interface ShiftDayOverrideInput {
+  date: string;
+  /**
+     * @minItems 1
+     * @maxItems 200
+     */
+  employeeIds: number[];
+  /** @pattern ^(?:[01][0-9]|2[0-3]):[0-5][0-9]$ */
+  startTime: string;
+  /** @pattern ^(?:[01][0-9]|2[0-3]):[0-5][0-9]$ */
+  endTime: string;
+}
+
+export interface ShiftDayOverrideResult {
+  success: boolean;
+  date: string;
+  employeeCount: number;
+  startTime: string;
+  endTime: string;
+}
+
+export interface DeviceTimeInput {
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$ */
+  dateTime: string;
+}
+
+export interface DeviceTimeResult {
+  success: boolean;
+  deviceDateTime: string;
+}
+
+export interface DeviceUserInput {
+  /** @minimum 1 */
+  employeeId: number;
+  /** @pattern ^[0-9]{1,9}$ */
+  userId: string;
+  /**
+     * @minLength 1
+     * @maxLength 24
+     */
+  name: string;
+}
+
+export interface DeviceUserResult {
+  success: boolean;
+  userId: string;
+  name: string;
+  updated: boolean;
+}
+
 export interface AttendanceSummary {
   totalDays: number;
   presentDays: number;
@@ -690,6 +760,10 @@ export type GetEmployeeShiftSchedule200AssignmentsItem = {
   /** @nullable */
   customShiftId?: number | null;
   /** @nullable */
+  customStartTime?: string | null;
+  /** @nullable */
+  customEndTime?: string | null;
+  /** @nullable */
   shiftId?: number | null;
   /** @nullable */
   shiftName?: string | null;
@@ -702,22 +776,6 @@ export type GetEmployeeShiftSchedule200 = {
   endDate?: string;
   days?: number;
   assignments?: GetEmployeeShiftSchedule200AssignmentsItem[];
-};
-
-export type UpdateEmployeeShiftScheduleBodyAssignmentsItem = {
-  date: string;
-  /** @nullable */
-  shiftId: number | null;
-};
-
-export type UpdateEmployeeShiftScheduleBody = {
-  startDate: string;
-  /**
-     * @minimum 1
-     * @maximum 30
-     */
-  days: number;
-  assignments: UpdateEmployeeShiftScheduleBodyAssignmentsItem[];
 };
 
 export type ListAttendanceParams = {
@@ -753,6 +811,12 @@ leaveTypeId?: number;
 export type GetLeaveBalanceParams = {
 employeeId: number;
 year?: number;
+};
+
+export type ExportAttendanceCsvParams = {
+startDate?: string;
+endDate?: string;
+employeeId?: number;
 };
 
 export type ListPayrollParams = {

@@ -7,7 +7,7 @@ export const employeeShiftAssignmentsTable = pgTable(
     tenantId: integer("tenant_id").notNull().default(1),
     employeeId: integer("employee_id").notNull(),
     assignmentDate: date("assignment_date", { mode: "string" }).notNull(),
-    // null means this employee is off on this date.
+    // null means off unless custom hours are present.
     shiftId: integer("shift_id"),
     customStartTime: text("custom_start_time"),
     customEndTime: text("custom_end_time"),

@@ -39,20 +39,25 @@ router.get("/shifts", async (_req, res): Promise<void> => {
 
 router.post("/shifts/day-overrides", async (req: AuthRequest, res): Promise<void> => {
   if (!requireAdminOrHr(req, res)) return;
+  const tenantId = req.user?.tenantId;
+  if (!tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { date, employeeIds, startTime, endTime } = req.body as {
     date?: string;
     employeeIds?: number[];
     startTime?: string;
     endTime?: string;
   };
-  const selectedIds = Array.isArray(employeeIds)
-    ? [...new Set(employeeIds.filter(id => Number.isInteger(id) && id > 0))]
-    : [];
   if (!isIsoDate(date)) { res.status(400).json({ error: "A valid date is required" }); return; }
-  if (selectedIds.length === 0 || selectedIds.length > 200) {
+  if (
+    !Array.isArray(employeeIds)
+    || employeeIds.length === 0
+    || employeeIds.length > 200
+    || !employeeIds.every(id => Number.isInteger(id) && id > 0)
+  ) {
     res.status(400).json({ error: "Select between 1 and 200 employees" });
     return;
   }
+  const selectedIds = [...new Set(employeeIds)];
   if (!isTime(startTime) || !isTime(endTime) || startTime === endTime) {
     res.status(400).json({ error: "Enter different, valid start and end times" });
     return;
@@ -70,6 +75,7 @@ router.post("/shifts/day-overrides", async (req: AuthRequest, res): Promise<void
   const [endHour, endMinute] = endTime.split(":").map(Number);
   await db.transaction(async tx => {
     await tx.insert(employeeShiftAssignmentsTable).values(employeeIdList.map(employeeId => ({
+      tenantId,
       employeeId,
       assignmentDate: date,
       shiftId: null,
@@ -92,6 +98,7 @@ router.post("/shifts/day-overrides", async (req: AuthRequest, res): Promise<void
     const existingAttendance = await tx.select().from(attendanceTable).where(and(
       inArray(attendanceTable.employeeId, employeeIdList),
       eq(attendanceTable.date, date),
+      eq(attendanceTable.tenantId, tenantId),
     ));
     for (const record of existingAttendance) {
       if (record.isManuallyEdited) continue;
@@ -99,12 +106,12 @@ router.post("/shifts/day-overrides", async (req: AuthRequest, res): Promise<void
       let isEarlyOut = false;
       if (record.checkIn) {
         const cutoff = new Date(record.checkIn);
-        cutoff.setHours(startHour, startMinute + 15, 0, 0);
+        cutoff.setUTCHours(startHour, startMinute + 15, 0, 0);
         isLate = record.checkIn > cutoff;
       }
       if (record.checkOut) {
         const cutoff = new Date(record.checkOut);
-        cutoff.setHours(endHour, endMinute, 0, 0);
+        cutoff.setUTCHours(endHour, endMinute, 0, 0);
         isEarlyOut = record.checkOut < cutoff;
       }
       const status = ["present", "late"].includes(record.status)
@@ -112,7 +119,7 @@ router.post("/shifts/day-overrides", async (req: AuthRequest, res): Promise<void
         : record.status;
       await tx.update(attendanceTable)
         .set({ isLate, isEarlyOut, status })
-        .where(eq(attendanceTable.id, record.id));
+        .where(and(eq(attendanceTable.id, record.id), eq(attendanceTable.tenantId, tenantId)));
     }
   });
 

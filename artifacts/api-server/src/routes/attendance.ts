@@ -165,7 +165,7 @@ router.post("/attendance/zkteco", async (req, res): Promise<void> => {
         if (scheduledShift) {
           const [sh, sm] = scheduledShift.startTime.split(":").map(Number);
           const cutoff = new Date(punchTime);
-          cutoff.setHours(sh, sm + scheduledShift.gracePeriodMinutes, 0, 0);
+          cutoff.setUTCHours(sh, sm + scheduledShift.gracePeriodMinutes, 0, 0);
           isLate = punchTime > cutoff;
         }
         await db.insert(attendanceTable).values({
@@ -179,7 +179,7 @@ router.post("/attendance/zkteco", async (req, res): Promise<void> => {
         if (scheduledShift) {
           const [eh, em] = scheduledShift.endTime.split(":").map(Number);
           const shiftEnd = new Date(punchTime);
-          shiftEnd.setHours(eh, em, 0, 0);
+          shiftEnd.setUTCHours(eh, em, 0, 0);
           isEarlyOut = punchTime < shiftEnd;
         }
         await db.update(attendanceTable)

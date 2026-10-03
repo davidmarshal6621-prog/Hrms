@@ -89,7 +89,7 @@ def main():
                 "name": name,
                 "updated": existing is not None,
             }
-        elif not fetch_users:
+        elif not fetch_users and not test_connection and not set_device_time and not add_device_user:
             conn.disable_device()
             device_disabled = True
 
@@ -104,7 +104,7 @@ def main():
                     "password": u.password or "",
                 })
             result = {"success": True, "count": len(users_result), "users": users_result}
-        elif not test_connection:
+        elif not test_connection and not set_device_time and not add_device_user:
             attendances = conn.get_attendance()
             records = []
             for att in attendances:

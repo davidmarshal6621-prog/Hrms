@@ -96,10 +96,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <>
               <SectionLabel>Configuration</SectionLabel>
               <NavLink href="/departments" icon={Building2}>Departments</NavLink>
+              <NavLink href="/shifts" icon={Clock}>Shifts</NavLink>
               {isAdmin && (
                 <>
                   <NavLink href="/branches" icon={GitBranch}>Branches</NavLink>
-                  <NavLink href="/shifts" icon={Clock}>Shifts</NavLink>
                   <NavLink href="/users" icon={UserCog}>Users</NavLink>
                   <NavLink href="/devices" icon={Cpu}>ZKTeco Devices</NavLink>
                 </>

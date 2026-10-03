@@ -43,6 +43,19 @@ function validPort(port: unknown): port is number {
   return Number.isInteger(port) && (port as number) >= 1 && (port as number) <= 65535;
 }
 
+function isValidLocalDateTime(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return false;
+  const [, year, month, day, hour, minute] = match.map(Number);
+  const calendarDate = new Date(Date.UTC(year, month - 1, day));
+  return calendarDate.getUTCFullYear() === year
+    && calendarDate.getUTCMonth() === month - 1
+    && calendarDate.getUTCDate() === day
+    && hour >= 0 && hour <= 23
+    && minute >= 0 && minute <= 59;
+}
+
 function requireMachineAdmin(req: AuthRequest, res: Response): boolean {
   if (req.user?.role !== "super_admin" && req.user?.role !== "admin") {
     res.status(403).json({ error: "Only company admins can change machine settings" });
@@ -381,14 +394,14 @@ router.post("/devices/:id/sync", async (req, res): Promise<void> => {
       if (!day.shiftStartTime) return false;
       const [sh, sm] = day.shiftStartTime.split(":").map(Number);
       const cutoff = new Date(checkIn);
-      cutoff.setHours(sh, sm + (day.shiftGracePeriodMinutes ?? 15), 0, 0);
+      cutoff.setUTCHours(sh, sm + (day.shiftGracePeriodMinutes ?? 15), 0, 0);
       return checkIn > cutoff;
     }
     function calcEarlyOut(checkOut: Date): boolean {
       if (!day.shiftEndTime) return false;
       const [eh, em] = day.shiftEndTime.split(":").map(Number);
       const cutoff = new Date(checkOut);
-      cutoff.setHours(eh, em, 0, 0);
+      cutoff.setUTCHours(eh, em, 0, 0);
       return checkOut < cutoff;
     }
 
@@ -538,11 +551,7 @@ router.post("/devices/:id/set-time", async (req: AuthRequest, res): Promise<void
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const { dateTime } = req.body as { dateTime?: string };
   if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid device ID" }); return; }
-  if (
-    typeof dateTime !== "string"
-    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateTime)
-    || Number.isNaN(new Date(dateTime).getTime())
-  ) {
+  if (!isValidLocalDateTime(dateTime)) {
     res.status(400).json({ error: "dateTime must be a valid local date and time" });
     return;
   }

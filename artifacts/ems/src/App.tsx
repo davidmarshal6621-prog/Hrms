@@ -90,7 +90,7 @@ function Router() {
 
       <Route path="/departments"><ProtectedRoute component={DepartmentsList} roles={ADMIN_ROLES} /></Route>
       <Route path="/branches"><ProtectedRoute component={BranchesList} roles={["super_admin", "admin"]} /></Route>
-      <Route path="/shifts"><ProtectedRoute component={ShiftsList} roles={["super_admin", "admin"]} /></Route>
+      <Route path="/shifts"><ProtectedRoute component={ShiftsList} roles={ADMIN_HR_ROLES} /></Route>
       <Route path="/users"><ProtectedRoute component={UsersList} roles={["super_admin", "admin"]} /></Route>
       <Route path="/devices"><ProtectedRoute component={DevicesPage} roles={["super_admin", "admin"]} /></Route>
 

@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UpdateEmployeeShiftScheduleBodyAssignmentsItem = {
-  date: Date;
-  /** @nullable */
-  shiftId: number | null;
-};
+export interface DeviceTimeInput {
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$ */
+  dateTime: string;
+}

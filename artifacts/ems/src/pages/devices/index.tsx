@@ -11,14 +11,23 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, RefreshCw, Wifi, WifiOff, Upload, Trash2, Settings, Users } from "lucide-react";
+import { Plus, RefreshCw, Wifi, WifiOff, Upload, Trash2, Settings, Users, Clock, UserPlus } from "lucide-react";
 import { apiUrl } from "@/lib/api-path";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Device {
   id: number; name: string; ip: string; port: number;
   location: string | null; isActive: boolean;
   lastSyncAt: string | null; lastSyncCount: number | null; lastSyncError: string | null;
   createdAt: string;
+}
+
+interface EmployeeOption {
+  id: number;
+  firstName: string;
+  lastName: string;
+  employeeCode: string;
+  enrollNumber?: string | null;
 }
 
 async function apiFetch(path: string, opts?: RequestInit) {
@@ -43,10 +52,55 @@ export default function DevicesPage() {
   const [testingForm, setTestingForm] = useState(false);
   const [syncLog, setSyncLog] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", ip: "", port: "4370", location: "" });
+  const [timeDevice, setTimeDevice] = useState<Device | null>(null);
+  const [machineDateTime, setMachineDateTime] = useState("");
+  const [userDevice, setUserDevice] = useState<Device | null>(null);
+  const [userForm, setUserForm] = useState({ employeeId: "", userId: "", name: "" });
 
   const { data: devices = [], isLoading } = useQuery<Device[]>({
     queryKey: ["devices"],
     queryFn: () => apiFetch("/devices"),
+  });
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ["employees"],
+    queryFn: () => apiFetch("/employees"),
+  });
+
+  const setTimeMut = useMutation({
+    mutationFn: ({ deviceId, dateTime }: { deviceId: number; dateTime: string }) =>
+      apiFetch(`/devices/${deviceId}/set-time`, {
+        method: "POST",
+        body: JSON.stringify({ dateTime }),
+      }),
+    onSuccess: (_data, variables) => {
+      setTimeDevice(null);
+      setMachineDateTime("");
+      toast({ title: "Machine time updated", description: `${variables.dateTime.replace("T", " ")}` });
+    },
+    onError: (error: Error) => toast({ title: "Could not set machine time", description: error.message, variant: "destructive" }),
+  });
+
+  const addUserMut = useMutation({
+    mutationFn: ({ deviceId, data }: { deviceId: number; data: typeof userForm }) =>
+      apiFetch(`/devices/${deviceId}/users`, {
+        method: "POST",
+        body: JSON.stringify({
+          employeeId: Number(data.employeeId),
+          userId: data.userId,
+          name: data.name,
+        }),
+      }),
+    onSuccess: (_data, variables) => {
+      setUserDevice(null);
+      setUserForm({ employeeId: "", userId: "", name: "" });
+      setSyncLog(
+        `✅ Machine user ${variables.data.userId} added for ${variables.data.name}.\n` +
+        "Enroll the employee's fingerprint or face directly on the machine.",
+      );
+      toast({ title: "Machine user added", description: "Enroll biometrics directly on the device." });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+    onError: (error: Error) => toast({ title: "Could not add machine user", description: error.message, variant: "destructive" }),
   });
 
   const createMut = useMutation({
@@ -265,7 +319,28 @@ export default function DevicesPage() {
                     ) : <span className="text-gray-400">Never synced</span>}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setTimeDevice(device); setMachineDateTime(""); }}
+                        className="flex items-center gap-1"
+                      >
+                        <Clock className="h-3.5 w-3.5" />
+                        Set Time
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setUserDevice(device);
+                          setUserForm({ employeeId: "", userId: "", name: "" });
+                        }}
+                        className="flex items-center gap-1"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Add User
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
@@ -315,6 +390,107 @@ export default function DevicesPage() {
           {syncLog}
         </div>
       )}
+
+      <Dialog open={!!timeDevice} onOpenChange={open => { if (!open) setTimeDevice(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set {timeDevice?.name} date and time</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="machine-date-time">Machine date and time</Label>
+            <Input
+              id="machine-date-time"
+              type="datetime-local"
+              value={machineDateTime}
+              onChange={event => setMachineDateTime(event.target.value)}
+            />
+            <p className="text-xs text-gray-500">
+              Enter the exact local date and time the device should use. The server time will not be substituted.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTimeDevice(null)}>Cancel</Button>
+            <Button
+              onClick={() => timeDevice && setTimeMut.mutate({ deviceId: timeDevice.id, dateTime: machineDateTime })}
+              disabled={!machineDateTime || setTimeMut.isPending}
+            >
+              {setTimeMut.isPending ? "Setting..." : "Set Machine Time"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!userDevice} onOpenChange={open => { if (!open) setUserDevice(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add employee to {userDevice?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>EMS employee</Label>
+              <Select
+                value={userForm.employeeId}
+                onValueChange={employeeId => {
+                  const employee = employees.find(item => item.id === Number(employeeId));
+                  const fullName = employee ? `${employee.firstName} ${employee.lastName}`.trim().slice(0, 24) : "";
+                  setUserForm(current => ({
+                    ...current,
+                    employeeId,
+                    userId: current.userId || employee?.enrollNumber || "",
+                    name: current.name || fullName,
+                  }));
+                }}
+              >
+                <SelectTrigger className="bg-white"><SelectValue placeholder="Select employee..." /></SelectTrigger>
+                <SelectContent>
+                  {employees.map(employee => (
+                    <SelectItem key={employee.id} value={String(employee.id)}>
+                      {employee.firstName} {employee.lastName} ({employee.employeeCode})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="machine-user-id">Machine user ID</Label>
+                <Input
+                  id="machine-user-id"
+                  inputMode="numeric"
+                  maxLength={9}
+                  placeholder="1 to 9 digits"
+                  value={userForm.userId}
+                  onChange={event => setUserForm(current => ({ ...current, userId: event.target.value.replace(/\D/g, "").slice(0, 9) }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="machine-user-name">Machine display name</Label>
+                <Input
+                  id="machine-user-name"
+                  maxLength={24}
+                  value={userForm.name}
+                  onChange={event => setUserForm(current => ({ ...current, name: event.target.value.slice(0, 24) }))}
+                />
+              </div>
+            </div>
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              This adds the user record and links its ID to the selected employee. Fingerprint or face enrollment must be completed directly on the machine.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUserDevice(null)}>Cancel</Button>
+            <Button
+              onClick={() => userDevice && addUserMut.mutate({ deviceId: userDevice.id, data: userForm })}
+              disabled={
+                !userForm.employeeId || !userForm.userId || !userForm.name.trim()
+                || addUserMut.isPending
+              }
+            >
+              {addUserMut.isPending ? "Adding..." : "Add Machine User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Device Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>

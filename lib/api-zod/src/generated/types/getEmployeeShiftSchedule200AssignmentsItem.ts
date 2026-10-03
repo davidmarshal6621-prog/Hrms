@@ -13,6 +13,10 @@ export type GetEmployeeShiftSchedule200AssignmentsItem = {
   /** @nullable */
   customShiftId?: number | null;
   /** @nullable */
+  customStartTime?: string | null;
+  /** @nullable */
+  customEndTime?: string | null;
+  /** @nullable */
   shiftId?: number | null;
   /** @nullable */
   shiftName?: string | null;

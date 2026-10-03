@@ -69,10 +69,11 @@ export function EmployeeShiftChart({
     if (!scheduleQuery.data) return;
     const next: Record<string, string> = {};
     for (const assignment of scheduleQuery.data.assignments) {
-      next[assignment.customStartTime && assignment.customEndTime ? "custom" : assignment.date] =
-        assignment.customStartTime && assignment.customEndTime ? "custom" : assignment.hasCustomAssignment
-        ? assignment.customShiftId === null ? "off" : String(assignment.customShiftId)
-        : "default";
+      next[assignment.date] = assignment.customStartTime && assignment.customEndTime
+        ? "custom"
+        : assignment.hasCustomAssignment
+          ? assignment.customShiftId === null ? "off" : String(assignment.customShiftId)
+          : "default";
     }
     setSelections(next);
   }, [scheduleQuery.data]);
@@ -81,10 +82,18 @@ export function EmployeeShiftChart({
     mutationFn: async () => {
       const assignments = Object.entries(selections)
         .filter(([, value]) => value !== "default")
-        .map(([date, value]) => ({
-          date,
-          shiftId: value === "off" ? null : Number(value),
-        }));
+        .map(([date, value]) => {
+          const existing = scheduleQuery.data?.assignments.find(assignment => assignment.date === date);
+          if (value === "custom") {
+            return {
+              date,
+              shiftId: null,
+              customStartTime: existing?.customStartTime,
+              customEndTime: existing?.customEndTime,
+            };
+          }
+          return { date, shiftId: value === "off" ? null : Number(value) };
+        });
       const token = localStorage.getItem("ems_token");
       const response = await fetch(apiUrl(`/employees/${employeeId}/shift-schedule`), {
         method: "PATCH",
@@ -111,9 +120,11 @@ export function EmployeeShiftChart({
     if (!scheduleQuery.data) return false;
     return scheduleQuery.data.assignments.some(assignment => {
       const current = selections[assignment.date] ?? "default";
-      const original = assignment.hasCustomAssignment
-        ? assignment.customShiftId === null ? "off" : String(assignment.customShiftId)
-        : "default";
+      const original = assignment.customStartTime && assignment.customEndTime
+        ? "custom"
+        : assignment.hasCustomAssignment
+          ? assignment.customShiftId === null ? "off" : String(assignment.customShiftId)
+          : "default";
       return current !== original;
     });
   }, [scheduleQuery.data, selections]);
@@ -126,7 +137,7 @@ export function EmployeeShiftChart({
           <div>
             <h3 className="font-semibold text-sm">30-Day Customized Shift Chart</h3>
             <p className="text-xs text-gray-500 mt-1">
-              Default uses the employee’s weekly schedule and main shift. Choose a shift or Off for a specific date.
+              Default uses the employee’s weekly schedule. Set a shift or Off for a specific date.
             </p>
           </div>
         </div>
@@ -193,6 +204,11 @@ export function EmployeeShiftChart({
                       <SelectContent>
                         <SelectItem value="default">Default / weekly shift</SelectItem>
                         <SelectItem value="off">Off day</SelectItem>
+                        {assignment.customStartTime && assignment.customEndTime && (
+                          <SelectItem value="custom">
+                            Custom hours ({assignment.customStartTime}-{assignment.customEndTime})
+                          </SelectItem>
+                        )}
                         {shifts.map(shift => (
                           <SelectItem key={shift.id} value={String(shift.id)}>
                             {shift.name} ({shift.startTime}-{shift.endTime})
