@@ -4,3 +4,4 @@
 - [OpenAPI Zod exports](api-zod-codegen.md) — inline request schemas can collide with generated TypeScript type exports; keep package barrel exports collision-safe
 - [EMS company isolation](ems-company-isolation.md) — each signup must be a separate company workspace, with tenant isolation enforced in server-side database access
 - [EMS device and shift operations](ems-device-and-shift-ops.md) — device clock writes are admin-confirmed; machine users map to employees; custom shift times apply to selected employees for one date
+- [EMS Oracle deployment](ems-oracle-deployment.md) — the user has an Ubuntu Oracle Cloud VM with Docker and VS Code for self-hosting; avoid publicly exposing Ollama or database ports
