@@ -5,6 +5,7 @@
  * Employee Management System API
  * OpenAPI spec version: 0.1.0
  */
+import type { UserInputWeeklyShiftSchedule } from './userInputWeeklyShiftSchedule';
 
 export interface UserInput {
   email: string;
@@ -22,6 +23,7 @@ export interface UserInput {
   branchId?: number | null;
   /** @nullable */
   shiftId?: number | null;
+  weeklyShiftSchedule?: UserInputWeeklyShiftSchedule;
   designation?: string;
   basicSalary?: number;
 }

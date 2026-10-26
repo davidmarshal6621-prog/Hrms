@@ -71,11 +71,13 @@ export default function AttendanceList() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const [date, setDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const today = format(new Date(), "yyyy-MM-dd");
+  const [startDate, setStartDate] = useState<string>(today);
+  const [endDate, setEndDate] = useState<string>(today);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const { data: attendanceData = [], isLoading } = useListAttendance({ date });
+  const { data: attendanceData = [], isLoading } = useListAttendance({ startDate, endDate });
   const { data: employees = [] } = useListEmployees({});
 
   // Correct modal
@@ -156,15 +158,26 @@ export default function AttendanceList() {
 
   async function exportCsv() {
     const token = localStorage.getItem("ems_token");
-    const res = await fetch(apiUrl(`/reports/attendance-csv?date=${date}`), {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) { toast({ title: "Export failed", variant: "destructive" }); return; }
-    const blob = await res.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `attendance_${date}.csv`;
-    a.click();
+    try {
+      const params = new URLSearchParams({ startDate, endDate });
+      const res = await fetch(apiUrl(`/reports/attendance-csv?${params}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `attendance_${startDate}_to_${endDate}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Could not export attendance",
+        variant: "destructive",
+      });
+    }
   }
 
   const stats = {
@@ -225,10 +238,21 @@ export default function AttendanceList() {
             <Input placeholder="Search employee..." value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)} className="pl-9 bg-white" />
           </div>
-          <div className="relative">
-            <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input type="date" value={date} onChange={e => setDate(e.target.value)}
-              className="pl-9 bg-white w-full sm:w-44" />
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-gray-600">From</label>
+            <div className="relative">
+              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input aria-label="From date" type="date" value={startDate} max={endDate}
+                onChange={e => { if (e.target.value) setStartDate(e.target.value); }} className="pl-9 bg-white w-full sm:w-44" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-gray-600">To</label>
+            <div className="relative">
+              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input aria-label="To date" type="date" value={endDate} min={startDate}
+                onChange={e => { if (e.target.value) setEndDate(e.target.value); }} className="pl-9 bg-white w-full sm:w-44" />
+            </div>
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full sm:w-36 bg-white"><SelectValue placeholder="Status" /></SelectTrigger>
@@ -268,7 +292,7 @@ export default function AttendanceList() {
               ) : filteredData.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="h-32 text-center text-gray-500">
-                    No attendance records found for this date.
+                    No attendance records found in this date range.
                   </TableCell>
                 </TableRow>
               ) : (

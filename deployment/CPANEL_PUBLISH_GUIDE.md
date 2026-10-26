@@ -21,6 +21,11 @@ NODE_ENV=production \
 pnpm --filter @workspace/ems run build
 ```
 
+Company administrators can create separate workspaces from the public signup
+page. Existing records are kept together in the legacy company workspace;
+new signups receive a separate tenant and cannot see or manage another
+company's records or biometric devices.
+
 ## 1. Upload the frontend
 
 Extract `frontend.zip` into:
@@ -51,10 +56,11 @@ DATABASE_URL=postgresql://DB_USER:URL_ENCODED_PASSWORD@127.0.0.1:5432/DB_NAME
 
 ## 3. Install/build the API
 
-The `source/` folder is a pnpm workspace. On cPanel Terminal:
+Extract the package so its `source/` directory is at `~/hrms-deploy/source`.
+That directory is the pnpm workspace. On cPanel Terminal:
 
 ```bash
-cd ~/hrms-deploy
+cd ~/hrms-deploy/source
 corepack enable
 pnpm install --frozen-lockfile
 pnpm --filter @workspace/api-server run build
@@ -69,13 +75,18 @@ DATABASE_URL='postgresql://DB_USER:URL_ENCODED_PASSWORD@127.0.0.1:5432/DB_NAME' 
 pnpm --filter @workspace/db run push
 ```
 
+For an existing installation, back up the database first, then run this schema
+push before starting the updated API. Existing rows receive tenant ID `1` and
+remain in the existing workspace; the migration does not delete application
+records.
+
 ## 4. Create the cPanel Node.js App
 
 In **Setup Node.js App**, use:
 
 ```text
 Node version:       20.x or newer
-Application root:   /home/CPANEL_USER/hrms-deploy
+Application root:   /home/CPANEL_USER/hrms-deploy/source
 Application URL:    /hrmslive-api
 Startup file:       artifacts/api-server/dist/index.mjs
 Application mode:   Production
@@ -101,9 +112,13 @@ https://YOUR_DOMAIN/hrmslive-api/api/healthz
 ## 5. Update after a GitHub push
 
 ```bash
-cd ~/hrms-deploy
+cd ~/hrms-deploy/source
+# Run git pull only if this source directory is a Git clone. For a ZIP install,
+# upload and extract the updated package instead.
 git pull origin main
 pnpm install --frozen-lockfile
+DATABASE_URL='postgresql://DB_USER:URL_ENCODED_PASSWORD@127.0.0.1:5432/DB_NAME' \
+pnpm --filter @workspace/db run push
 pnpm --filter @workspace/api-server run build
 
 BASE_PATH=/hrmslive/ \
@@ -117,12 +132,23 @@ cp -a artifacts/ems/dist/public/. ~/public_html/hrmslive/
 
 Then click **Restart Application** in cPanel.
 
-## ZKTeco requirement
+## ZKTeco connection
 
-The cPanel server must be able to make an outbound TCP connection to:
+The cPanel account running the API needs Python 3 and the `pyzk` package
+available to `python3`. In cPanel Terminal, install and verify it as the same
+account that owns the Node.js app:
 
-```text
-139.135.57.165:4370
+```bash
+python3 -m pip install --user pyzk
+python3 -c 'from zk import ZK; print("pyzk is ready")'
 ```
 
-Ask the hosting provider to allow this connection if device sync fails.
+Use the public IPv4 address and port for each company's own machine. The API
+server must be able to open a TCP connection to that address (usually port
+`4370`). Private office-network addresses such as `192.168.x.x` cannot be
+reached by a hosted server unless a VPN or secure network route is configured.
+Restrict any router/firewall port forwarding to trusted sources where possible.
+
+The **Test Connection** action performs a lightweight device probe without
+downloading attendance or disabling the machine. Attendance sync attempts to
+re-enable the device even when a pull fails.

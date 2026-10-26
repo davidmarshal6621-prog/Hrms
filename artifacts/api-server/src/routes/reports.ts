@@ -24,66 +24,112 @@ function currency(n: number | null | undefined): string {
 // ─── Attendance CSV ──────────────────────────────────────────────────────────
 
 router.get("/reports/attendance-csv", async (req, res): Promise<void> => {
-  const { employeeId, month, year } = req.query as { employeeId?: string; month?: string; year?: string };
-  if (!employeeId) { res.status(400).json({ error: "employeeId required" }); return; }
+  const { employeeId, month, year, date, startDate: requestedStart, endDate: requestedEnd } =
+    req.query as {
+      employeeId?: string;
+      month?: string;
+      year?: string;
+      date?: string;
+      startDate?: string;
+      endDate?: string;
+    };
+  const isIsoDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime())
+    && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+  const eid = employeeId === undefined ? undefined : Number(employeeId);
+  if (eid !== undefined && (!Number.isInteger(eid) || eid <= 0)) {
+    res.status(400).json({ error: "employeeId must be a positive integer" });
+    return;
+  }
 
-  const eid = parseInt(employeeId, 10);
-  const now = new Date();
-  const m = month ? parseInt(month, 10) : now.getMonth() + 1;
-  const y = year ? parseInt(year, 10) : now.getFullYear();
-  const startDate = `${y}-${pad(m)}-01`;
-  const endDate = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
+  let startDate: string;
+  let endDate: string;
+  if (date !== undefined) {
+    if (!isIsoDate(date)) { res.status(400).json({ error: "Use a valid date in YYYY-MM-DD format" }); return; }
+    startDate = date;
+    endDate = date;
+  } else if (requestedStart !== undefined || requestedEnd !== undefined) {
+    if (
+      !requestedStart || !requestedEnd
+      || !isIsoDate(requestedStart) || !isIsoDate(requestedEnd)
+      || requestedStart > requestedEnd
+    ) {
+      res.status(400).json({ error: "Provide a valid startDate and endDate with startDate on or before endDate" });
+      return;
+    }
+    startDate = requestedStart;
+    endDate = requestedEnd;
+  } else {
+    const now = new Date();
+    const m = month === undefined ? now.getMonth() + 1 : Number(month);
+    const y = year === undefined ? now.getFullYear() : Number(year);
+    if (!Number.isInteger(m) || m < 1 || m > 12 || !Number.isInteger(y) || y < 1900 || y > 9999) {
+      res.status(400).json({ error: "Provide a valid month and year" });
+      return;
+    }
+    startDate = `${y}-${pad(m)}-01`;
+    endDate = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
+  }
 
-  const [emp] = await db.select().from(employeesTable).where(eq(employeesTable.id, eid));
-  if (!emp) { res.status(404).json({ error: "Employee not found" }); return; }
+  const [employee] = eid === undefined
+    ? []
+    : await db.select().from(employeesTable).where(eq(employeesTable.id, eid));
+  if (eid !== undefined && !employee) { res.status(404).json({ error: "Employee not found" }); return; }
 
+  const conditions = [
+    gte(attendanceTable.date, startDate),
+    lte(attendanceTable.date, endDate),
+  ];
+  if (eid !== undefined) conditions.push(eq(attendanceTable.employeeId, eid));
   const records = await db.select().from(attendanceTable)
-    .where(and(
-      eq(attendanceTable.employeeId, eid),
-      gte(attendanceTable.date, startDate),
-      lte(attendanceTable.date, endDate),
-    ))
-    .orderBy(attendanceTable.date);
+    .where(and(...conditions))
+    .orderBy(attendanceTable.date, attendanceTable.employeeId);
+  const employees = eid === undefined
+    ? await db.select().from(employeesTable)
+    : employee ? [employee] : [];
+  const employeeMap = new Map(employees.map(item => [item.id, item]));
 
-  // Build CSV
-  const monthName = new Date(y, m - 1, 1).toLocaleString("en", { month: "long" });
-  const filename = `attendance_${emp.employeeCode}_${monthName}_${y}.csv`;
-
-  res.setHeader("Content-Type", "text/csv");
+  const csvCell = (value: string | number) => {
+    const text = String(value);
+    const safeText = /^[=+\-@]/.test(text) ? `'${text}` : text;
+    return `"${safeText.replaceAll('"', '""')}"`;
+  };
+  const filename = employee
+    ? `attendance_${employee.employeeCode}_${startDate}_to_${endDate}.csv`
+    : `attendance_${startDate}_to_${endDate}.csv`;
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
 
   const csvLines = [
-    `Attendance Report - ${emp.firstName} ${emp.lastName} (${emp.employeeCode})`,
-    `Period: ${monthName} ${y}`,
+    `Attendance Report`,
+    `Period: ${startDate} to ${endDate}`,
     ``,
-    `Date,Check In,Check Out,Working Hours,Status,Late,Early Out`,
+    `Date,Employee Code,Employee,Check In,Check Out,Working Hours,Status,Late,Early Out`,
   ];
-
-  for (const r of records) {
-    const ci = r.checkIn ? fmtTime(r.checkIn) : "-";
-    const co = r.checkOut ? fmtTime(r.checkOut) : "-";
-    const hours = fmtHours(r.workingHours);
-    const status = r.status ?? "-";
-    const late = r.isLate ? "Yes" : "No";
-    const earlyOut = r.isEarlyOut ? "Yes" : "No";
-    csvLines.push(`${r.date},${ci},${co},${hours},${status},${late},${earlyOut}`);
+  for (const record of records) {
+    const rowEmployee = employeeMap.get(record.employeeId);
+    csvLines.push([
+      record.date,
+      rowEmployee?.employeeCode ?? "-",
+      rowEmployee ? `${rowEmployee.firstName} ${rowEmployee.lastName}` : "-",
+      record.checkIn ? fmtTime(record.checkIn) : "-",
+      record.checkOut ? fmtTime(record.checkOut) : "-",
+      fmtHours(record.workingHours),
+      record.status ?? "-",
+      record.isLate ? "Yes" : "No",
+      record.isEarlyOut ? "Yes" : "No",
+    ].map(csvCell).join(","));
   }
-
-  // Summary
-  const present = records.filter(r => ["present", "late"].includes(r.status)).length;
-  const absent = records.filter(r => r.status === "absent").length;
-  const late = records.filter(r => r.isLate).length;
-  const totalHours = records.reduce((s, r) => s + (r.workingHours ?? 0), 0);
-
-  csvLines.push(``);
-  csvLines.push(`Summary`);
-  csvLines.push(`Total Records,${records.length}`);
-  csvLines.push(`Present Days,${present}`);
-  csvLines.push(`Absent Days,${absent}`);
-  csvLines.push(`Late Days,${late}`);
-  csvLines.push(`Total Working Hours,${totalHours.toFixed(1)} hrs`);
-
-  res.end(csvLines.join("\n"));
+  const present = records.filter(record => ["present", "late"].includes(record.status)).length;
+  const absent = records.filter(record => record.status === "absent").length;
+  const late = records.filter(record => record.isLate).length;
+  const totalHours = records.reduce((sum, record) => sum + (record.workingHours ?? 0), 0);
+  csvLines.push("", "Summary", csvCell("Total Records") + "," + records.length,
+    csvCell("Present Days") + "," + present,
+    csvCell("Absent Days") + "," + absent,
+    csvCell("Late Days") + "," + late,
+    csvCell("Total Working Hours") + "," + csvCell(`${totalHours.toFixed(1)} hrs`));
+  res.end(csvLines.join("\r\n"));
 });
 
 // ─── Payslip PDF ─────────────────────────────────────────────────────────────

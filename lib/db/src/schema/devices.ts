@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const devicesTable = pgTable("devices", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   name: text("name").notNull(),
   ip: text("ip").notNull(),
   port: integer("port").notNull().default(4370),

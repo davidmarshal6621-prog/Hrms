@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
+import { ShiftWeekPicker, type ShiftScheduleValue } from "@/components/shift-week-picker";
 
 export default function NewEmployee() {
   const [, setLocation] = useLocation();
@@ -28,6 +29,7 @@ export default function NewEmployee() {
     departmentId: "",
     branchId: "",
     shiftId: "",
+    weeklyShiftSchedule: {} as ShiftScheduleValue,
     basicSalary: "",
   });
 
@@ -40,6 +42,11 @@ export default function NewEmployee() {
           departmentId: formData.departmentId ? Number(formData.departmentId) : undefined,
           branchId: formData.branchId ? Number(formData.branchId) : undefined,
           shiftId: formData.shiftId ? Number(formData.shiftId) : undefined,
+          weeklyShiftSchedule: Object.fromEntries(
+            Object.entries(formData.weeklyShiftSchedule)
+              .filter(([, shiftId]) => shiftId !== undefined)
+              .map(([day, shiftId]) => [day, shiftId]),
+          ) as Record<string, number | null>,
           basicSalary: formData.basicSalary ? Number(formData.basicSalary) : undefined,
         } 
       },
@@ -131,6 +138,20 @@ export default function NewEmployee() {
               <Label>Basic Salary</Label>
               <Input type="number" value={formData.basicSalary} onChange={(e) => setFormData({...formData, basicSalary: e.target.value})} placeholder="0.00" />
             </div>
+          </div>
+
+          <div className="space-y-3 border-t pt-5">
+            <div>
+              <Label>Day-wise Shift Schedule</Label>
+              <p className="text-xs text-gray-500 mt-1">
+                Select a shift for each day. “Default shift” uses the selected main shift.
+              </p>
+            </div>
+            <ShiftWeekPicker
+              shifts={shifts ?? []}
+              value={formData.weeklyShiftSchedule}
+              onChange={weeklyShiftSchedule => setFormData({ ...formData, weeklyShiftSchedule })}
+            />
           </div>
 
           <div className="flex justify-end gap-4 pt-4 border-t border-gray-100 dark:border-gray-700">

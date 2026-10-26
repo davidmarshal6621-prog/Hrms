@@ -1,9 +1,32 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, employeesTable, departmentsTable, branchesTable, shiftsTable } from "@workspace/db";
+import { eq, and, gte, lte } from "drizzle-orm";
+import {
+  db,
+  employeesTable,
+  departmentsTable,
+  branchesTable,
+  shiftsTable,
+  employeeShiftAssignmentsTable,
+} from "@workspace/db";
 import { getProvisioningDefaults } from "../lib/employee-provisioning.js";
+import {
+  WEEKDAY_KEYS,
+  parseWeeklyShiftSchedule,
+  serializeWeeklyShiftSchedule,
+  shiftIdForDate,
+} from "../lib/shift-schedule.js";
 
 const router: IRouter = Router();
+
+function isIsoDate(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function addDays(date: string, amount: number): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const result = new Date(Date.UTC(year, month - 1, day + amount));
+  return result.toISOString().slice(0, 10);
+}
 
 async function enrichEmployee(emp: typeof employeesTable.$inferSelect) {
   const [dept] = emp.departmentId
@@ -24,6 +47,7 @@ async function enrichEmployee(emp: typeof employeesTable.$inferSelect) {
     departmentId: emp.departmentId, departmentName: dept?.name ?? null,
     branchId: emp.branchId, branchName: branch?.name ?? null,
     shiftId: emp.shiftId, shiftName: shift?.name ?? null,
+    weeklyShiftSchedule: parseWeeklyShiftSchedule(emp.weeklyShiftSchedule),
     dateOfJoining: emp.dateOfJoining,
     basicSalary: emp.basicSalary, allowances: emp.allowances,
     enrollNumber: emp.enrollNumber, status: emp.status,
@@ -117,7 +141,7 @@ router.get("/employees", async (req, res): Promise<void> => {
 router.post("/employees", async (req, res): Promise<void> => {
   const {
     firstName, lastName, employeeCode, email, phone, cnic, designation,
-    departmentId, branchId, shiftId, dateOfJoining, basicSalary, allowances, enrollNumber,
+    departmentId, branchId, shiftId, weeklyShiftSchedule, dateOfJoining, basicSalary, allowances, enrollNumber,
     address, fatherName, emergencyContact, bloodGroup, dateOfBirth, gender, religion, nationality,
   } = req.body;
 
@@ -130,7 +154,9 @@ router.post("/employees", async (req, res): Promise<void> => {
   const [emp] = await db.insert(employeesTable).values({
     firstName, lastName, employeeCode, email, phone, cnic, designation,
     departmentId: departmentId ?? defaults.departmentId, branchId: branchId ?? defaults.branchId,
-    shiftId: shiftId ?? defaults.shiftId, dateOfJoining: dateOfJoining ?? null,
+    shiftId: shiftId ?? defaults.shiftId,
+    weeklyShiftSchedule: serializeWeeklyShiftSchedule(weeklyShiftSchedule),
+    dateOfJoining: dateOfJoining ?? null,
     basicSalary: basicSalary ?? defaults.salary, allowances: allowances ?? 0,
     enrollNumber: enrollNumber ?? null,
     address: address ?? null, fatherName: fatherName ?? null,
@@ -140,6 +166,136 @@ router.post("/employees", async (req, res): Promise<void> => {
   }).returning();
 
   res.status(201).json(await enrichEmployee(emp));
+});
+
+router.get("/employees/:id/shift-schedule", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, id));
+  if (!employee) {
+    res.status(404).json({ error: "Employee not found" });
+    return;
+  }
+
+  const requestedStart = req.query.startDate;
+  const startDate = isIsoDate(requestedStart)
+    ? requestedStart
+    : new Date().toISOString().slice(0, 10);
+  const requestedDays = Number(req.query.days ?? 30);
+  const days = Number.isFinite(requestedDays)
+    ? Math.min(Math.max(Math.trunc(requestedDays), 1), 30)
+    : 30;
+  const endDate = addDays(startDate, days - 1);
+
+  const [customRows, shifts] = await Promise.all([
+    db.select()
+      .from(employeeShiftAssignmentsTable)
+      .where(and(
+        eq(employeeShiftAssignmentsTable.employeeId, id),
+        gte(employeeShiftAssignmentsTable.assignmentDate, startDate),
+        lte(employeeShiftAssignmentsTable.assignmentDate, endDate),
+      )),
+    db.select().from(shiftsTable).orderBy(shiftsTable.name),
+  ]);
+  const customMap = new Map(customRows.map(row => [row.assignmentDate, row]));
+  const shiftMap = new Map(shifts.map(shift => [shift.id, shift]));
+  const weekly = parseWeeklyShiftSchedule(employee.weeklyShiftSchedule);
+
+  const assignments = Array.from({ length: days }, (_, index) => {
+    const date = addDays(startDate, index);
+    const custom = customMap.get(date);
+    const weeklyShiftId = shiftIdForDate(weekly, date, employee.shiftId);
+    const hasCustomTimes = Boolean(custom?.customStartTime && custom?.customEndTime);
+    const effectiveShiftId = custom ? (hasCustomTimes ? null : custom.shiftId) : weeklyShiftId;
+    const effectiveShift = effectiveShiftId ? shiftMap.get(effectiveShiftId) : undefined;
+
+    return {
+      date,
+      dayOfWeek: WEEKDAY_KEYS[new Date(`${date}T12:00:00Z`).getUTCDay()],
+      hasCustomAssignment: Boolean(custom),
+      customShiftId: custom ? custom.shiftId : undefined,
+      customStartTime: hasCustomTimes ? custom?.customStartTime : null,
+      customEndTime: hasCustomTimes ? custom?.customEndTime : null,
+      shiftId: effectiveShiftId,
+      shiftName: hasCustomTimes
+        ? `Custom ${custom?.customStartTime}-${custom?.customEndTime}`
+        : effectiveShift?.name ?? null,
+      source: hasCustomTimes
+        ? "custom-times"
+        : custom ? (custom.shiftId === null ? "custom-off" : "custom") : "default",
+    };
+  });
+
+  res.json({ employeeId: id, startDate, endDate, days, assignments });
+});
+
+router.patch("/employees/:id/shift-schedule", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const [employee] = await db.select({ id: employeesTable.id }).from(employeesTable)
+    .where(eq(employeesTable.id, id));
+  if (!employee) {
+    res.status(404).json({ error: "Employee not found" });
+    return;
+  }
+
+  const startDate = req.body?.startDate;
+  const assignments = Array.isArray(req.body?.assignments) ? req.body.assignments : [];
+  const days = Number(req.body?.days ?? 30);
+  if (!isIsoDate(startDate) || !Number.isInteger(days) || days < 1 || days > 30) {
+    res.status(400).json({ error: "startDate and days (1-30) are required" });
+    return;
+  }
+  const endDate = addDays(startDate, days - 1);
+  const uniqueAssignments = new Map<string, {
+    shiftId: number | null;
+    customStartTime: string | null;
+    customEndTime: string | null;
+  }>();
+
+  for (const assignment of assignments) {
+    const date = assignment?.date;
+    const shiftId = assignment?.shiftId;
+    if (!isIsoDate(date) || date < startDate || date > endDate) {
+      res.status(400).json({ error: "Each assignment date must be inside the selected range" });
+      return;
+    }
+    const customStartTime = assignment?.customStartTime;
+    const customEndTime = assignment?.customEndTime;
+    if (customStartTime !== undefined || customEndTime !== undefined) {
+      if (
+        typeof customStartTime !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(customStartTime)
+        || typeof customEndTime !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(customEndTime)
+        || customStartTime === customEndTime
+      ) {
+        res.status(400).json({ error: "Custom shifts require different, valid start and end times" });
+        return;
+      }
+      uniqueAssignments.set(date, { shiftId: null, customStartTime, customEndTime });
+    } else {
+      if (shiftId !== null && (!Number.isInteger(shiftId) || shiftId <= 0)) {
+        res.status(400).json({ error: "shiftId must be a positive integer or null for an off day" });
+        return;
+      }
+      uniqueAssignments.set(date, { shiftId, customStartTime: null, customEndTime: null });
+    }
+  }
+
+  await db.delete(employeeShiftAssignmentsTable).where(and(
+    eq(employeeShiftAssignmentsTable.employeeId, id),
+    gte(employeeShiftAssignmentsTable.assignmentDate, startDate),
+    lte(employeeShiftAssignmentsTable.assignmentDate, endDate),
+  ));
+
+  if (uniqueAssignments.size > 0) {
+    await db.insert(employeeShiftAssignmentsTable).values(
+      [...uniqueAssignments.entries()].map(([assignmentDate, assignment]) => ({
+        employeeId: id,
+        assignmentDate,
+        ...assignment,
+      })),
+    );
+  }
+
+  res.json({ success: true, employeeId: id, startDate, endDate, days });
 });
 
 router.get("/employees/:id", async (req, res): Promise<void> => {
@@ -158,6 +314,7 @@ router.patch("/employees/:id", async (req, res): Promise<void> => {
   const fields = [
     "firstName", "lastName", "email", "phone", "cnic", "designation",
     "departmentId", "branchId", "shiftId", "dateOfJoining", "basicSalary", "allowances",
+    "weeklyShiftSchedule",
     "enrollNumber", "status",
     "address", "fatherName", "emergencyContact", "bloodGroup",
     "dateOfBirth", "gender", "religion", "nationality", "profilePhoto",
@@ -165,7 +322,11 @@ router.patch("/employees/:id", async (req, res): Promise<void> => {
 
   const updates: Record<string, unknown> = {};
   for (const f of fields) {
-    if (req.body[f] !== undefined) updates[f] = req.body[f];
+    if (req.body[f] !== undefined) {
+      updates[f] = f === "weeklyShiftSchedule"
+        ? serializeWeeklyShiftSchedule(req.body[f])
+        : req.body[f];
+    }
   }
 
   // CV update with approval workflow

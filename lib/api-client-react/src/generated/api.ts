@@ -33,11 +33,19 @@ import type {
   Department,
   DepartmentInput,
   DepartmentUpdate,
+  DeviceTimeInput,
+  DeviceTimeResult,
+  DeviceUserInput,
+  DeviceUserResult,
   Employee,
   EmployeeInput,
+  EmployeeShiftScheduleUpdate,
   EmployeeStats,
   EmployeeUpdate,
+  ExportAttendanceCsvParams,
   GetAttendanceSummaryParams,
+  GetEmployeeShiftSchedule200,
+  GetEmployeeShiftScheduleParams,
   GetLeaveBalanceParams,
   GetPayrollSummaryParams,
   HealthStatus,
@@ -62,8 +70,11 @@ import type {
   PayrollUpdate,
   PunchLog,
   Shift,
+  ShiftDayOverrideInput,
+  ShiftDayOverrideResult,
   ShiftInput,
   ShiftUpdate,
+  SignupInput,
   User,
   UserInput,
   UserProfile,
@@ -230,6 +241,77 @@ export const useLogin = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getLoginMutationOptions(options));
+    }
+
+export const getSignupUrl = () => {
+
+
+
+
+  return `/api/auth/signup`
+}
+
+/**
+ * @summary Create a company workspace and its administrator account
+ */
+export const signup = async (signupInput: SignupInput, options?: RequestInit): Promise<AuthResponse> => {
+
+  return customFetch<AuthResponse>(getSignupUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      signupInput,)
+  }
+);}
+
+
+
+
+export const getSignupMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof signup>>, TError,{data: BodyType<SignupInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof signup>>, TError,{data: BodyType<SignupInput>}, TContext> => {
+
+const mutationKey = ['signup'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof signup>>, {data: BodyType<SignupInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  signup(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SignupMutationResult = NonNullable<Awaited<ReturnType<typeof signup>>>
+    export type SignupMutationBody = BodyType<SignupInput>
+    export type SignupMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a company workspace and its administrator account
+ */
+export const useSignup = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof signup>>, TError,{data: BodyType<SignupInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof signup>>,
+        TError,
+        {data: BodyType<SignupInput>},
+        TContext
+      > => {
+      return useMutation(getSignupMutationOptions(options));
     }
 
 export const getLogoutUrl = () => {
@@ -1789,6 +1871,167 @@ export const useDeleteEmployee = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteEmployeeMutationOptions(options));
+    }
+
+export const getGetEmployeeShiftScheduleUrl = (id: number,
+    params?: GetEmployeeShiftScheduleParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/employees/${id}/shift-schedule?${stringifiedParams}` : `/api/employees/${id}/shift-schedule`
+}
+
+/**
+ * @summary Get a 30-day employee shift chart
+ */
+export const getEmployeeShiftSchedule = async (id: number,
+    params?: GetEmployeeShiftScheduleParams, options?: RequestInit): Promise<GetEmployeeShiftSchedule200> => {
+
+  return customFetch<GetEmployeeShiftSchedule200>(getGetEmployeeShiftScheduleUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEmployeeShiftScheduleQueryKey = (id: number,
+    params?: GetEmployeeShiftScheduleParams,) => {
+    return [
+    `/api/employees/${id}/shift-schedule`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetEmployeeShiftScheduleQueryOptions = <TData = Awaited<ReturnType<typeof getEmployeeShiftSchedule>>, TError = ErrorType<unknown>>(id: number,
+    params?: GetEmployeeShiftScheduleParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEmployeeShiftSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEmployeeShiftScheduleQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEmployeeShiftSchedule>>> = ({ signal }) => getEmployeeShiftSchedule(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEmployeeShiftSchedule>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEmployeeShiftScheduleQueryResult = NonNullable<Awaited<ReturnType<typeof getEmployeeShiftSchedule>>>
+export type GetEmployeeShiftScheduleQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get a 30-day employee shift chart
+ */
+
+export function useGetEmployeeShiftSchedule<TData = Awaited<ReturnType<typeof getEmployeeShiftSchedule>>, TError = ErrorType<unknown>>(
+ id: number,
+    params?: GetEmployeeShiftScheduleParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEmployeeShiftSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEmployeeShiftScheduleQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateEmployeeShiftScheduleUrl = (id: number,) => {
+
+
+
+
+  return `/api/employees/${id}/shift-schedule`
+}
+
+/**
+ * @summary Replace a date-based employee shift chart
+ */
+export const updateEmployeeShiftSchedule = async (id: number,
+    employeeShiftScheduleUpdate: EmployeeShiftScheduleUpdate, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getUpdateEmployeeShiftScheduleUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      employeeShiftScheduleUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateEmployeeShiftScheduleMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEmployeeShiftSchedule>>, TError,{id: number;data: BodyType<EmployeeShiftScheduleUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateEmployeeShiftSchedule>>, TError,{id: number;data: BodyType<EmployeeShiftScheduleUpdate>}, TContext> => {
+
+const mutationKey = ['updateEmployeeShiftSchedule'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEmployeeShiftSchedule>>, {id: number;data: BodyType<EmployeeShiftScheduleUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateEmployeeShiftSchedule(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateEmployeeShiftScheduleMutationResult = NonNullable<Awaited<ReturnType<typeof updateEmployeeShiftSchedule>>>
+    export type UpdateEmployeeShiftScheduleMutationBody = BodyType<EmployeeShiftScheduleUpdate>
+    export type UpdateEmployeeShiftScheduleMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Replace a date-based employee shift chart
+ */
+export const useUpdateEmployeeShiftSchedule = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEmployeeShiftSchedule>>, TError,{id: number;data: BodyType<EmployeeShiftScheduleUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateEmployeeShiftSchedule>>,
+        TError,
+        {id: number;data: BodyType<EmployeeShiftScheduleUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateEmployeeShiftScheduleMutationOptions(options));
     }
 
 export const getListAttendanceUrl = (params?: ListAttendanceParams,) => {
@@ -3590,6 +3833,305 @@ export const useDeleteShift = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeleteShiftMutationOptions(options));
     }
+
+export const getAssignCustomShiftHoursUrl = () => {
+
+
+
+
+  return `/api/shifts/day-overrides`
+}
+
+/**
+ * @summary Assign custom working hours to selected employees for one date
+ */
+export const assignCustomShiftHours = async (shiftDayOverrideInput: ShiftDayOverrideInput, options?: RequestInit): Promise<ShiftDayOverrideResult> => {
+
+  return customFetch<ShiftDayOverrideResult>(getAssignCustomShiftHoursUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftDayOverrideInput,)
+  }
+);}
+
+
+
+
+export const getAssignCustomShiftHoursMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignCustomShiftHours>>, TError,{data: BodyType<ShiftDayOverrideInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof assignCustomShiftHours>>, TError,{data: BodyType<ShiftDayOverrideInput>}, TContext> => {
+
+const mutationKey = ['assignCustomShiftHours'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof assignCustomShiftHours>>, {data: BodyType<ShiftDayOverrideInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  assignCustomShiftHours(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AssignCustomShiftHoursMutationResult = NonNullable<Awaited<ReturnType<typeof assignCustomShiftHours>>>
+    export type AssignCustomShiftHoursMutationBody = BodyType<ShiftDayOverrideInput>
+    export type AssignCustomShiftHoursMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Assign custom working hours to selected employees for one date
+ */
+export const useAssignCustomShiftHours = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignCustomShiftHours>>, TError,{data: BodyType<ShiftDayOverrideInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof assignCustomShiftHours>>,
+        TError,
+        {data: BodyType<ShiftDayOverrideInput>},
+        TContext
+      > => {
+      return useMutation(getAssignCustomShiftHoursMutationOptions(options));
+    }
+
+export const getSetDeviceTimeUrl = (id: number,) => {
+
+
+
+
+  return `/api/devices/${id}/set-time`
+}
+
+/**
+ * @summary Set the selected ZKTeco device's date and time
+ */
+export const setDeviceTime = async (id: number,
+    deviceTimeInput: DeviceTimeInput, options?: RequestInit): Promise<DeviceTimeResult> => {
+
+  return customFetch<DeviceTimeResult>(getSetDeviceTimeUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      deviceTimeInput,)
+  }
+);}
+
+
+
+
+export const getSetDeviceTimeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setDeviceTime>>, TError,{id: number;data: BodyType<DeviceTimeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setDeviceTime>>, TError,{id: number;data: BodyType<DeviceTimeInput>}, TContext> => {
+
+const mutationKey = ['setDeviceTime'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setDeviceTime>>, {id: number;data: BodyType<DeviceTimeInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  setDeviceTime(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetDeviceTimeMutationResult = NonNullable<Awaited<ReturnType<typeof setDeviceTime>>>
+    export type SetDeviceTimeMutationBody = BodyType<DeviceTimeInput>
+    export type SetDeviceTimeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Set the selected ZKTeco device's date and time
+ */
+export const useSetDeviceTime = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setDeviceTime>>, TError,{id: number;data: BodyType<DeviceTimeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setDeviceTime>>,
+        TError,
+        {id: number;data: BodyType<DeviceTimeInput>},
+        TContext
+      > => {
+      return useMutation(getSetDeviceTimeMutationOptions(options));
+    }
+
+export const getAddDeviceUserUrl = (id: number,) => {
+
+
+
+
+  return `/api/devices/${id}/users`
+}
+
+/**
+ * @summary Add an employee user to a ZKTeco device and link the machine ID
+ */
+export const addDeviceUser = async (id: number,
+    deviceUserInput: DeviceUserInput, options?: RequestInit): Promise<DeviceUserResult> => {
+
+  return customFetch<DeviceUserResult>(getAddDeviceUserUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      deviceUserInput,)
+  }
+);}
+
+
+
+
+export const getAddDeviceUserMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addDeviceUser>>, TError,{id: number;data: BodyType<DeviceUserInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addDeviceUser>>, TError,{id: number;data: BodyType<DeviceUserInput>}, TContext> => {
+
+const mutationKey = ['addDeviceUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addDeviceUser>>, {id: number;data: BodyType<DeviceUserInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  addDeviceUser(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddDeviceUserMutationResult = NonNullable<Awaited<ReturnType<typeof addDeviceUser>>>
+    export type AddDeviceUserMutationBody = BodyType<DeviceUserInput>
+    export type AddDeviceUserMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add an employee user to a ZKTeco device and link the machine ID
+ */
+export const useAddDeviceUser = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addDeviceUser>>, TError,{id: number;data: BodyType<DeviceUserInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addDeviceUser>>,
+        TError,
+        {id: number;data: BodyType<DeviceUserInput>},
+        TContext
+      > => {
+      return useMutation(getAddDeviceUserMutationOptions(options));
+    }
+
+export const getExportAttendanceCsvUrl = (params?: ExportAttendanceCsvParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/reports/attendance-csv?${stringifiedParams}` : `/api/reports/attendance-csv`
+}
+
+/**
+ * @summary Download attendance CSV for a date range
+ */
+export const exportAttendanceCsv = async (params?: ExportAttendanceCsvParams, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getExportAttendanceCsvUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportAttendanceCsvQueryKey = (params?: ExportAttendanceCsvParams,) => {
+    return [
+    `/api/reports/attendance-csv`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExportAttendanceCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportAttendanceCsv>>, TError = ErrorType<void>>(params?: ExportAttendanceCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportAttendanceCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportAttendanceCsvQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportAttendanceCsv>>> = ({ signal }) => exportAttendanceCsv(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportAttendanceCsv>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportAttendanceCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportAttendanceCsv>>>
+export type ExportAttendanceCsvQueryError = ErrorType<void>
+
+
+/**
+ * @summary Download attendance CSV for a date range
+ */
+
+export function useExportAttendanceCsv<TData = Awaited<ReturnType<typeof exportAttendanceCsv>>, TError = ErrorType<void>>(
+ params?: ExportAttendanceCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportAttendanceCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportAttendanceCsvQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListPayrollUrl = (params?: ListPayrollParams,) => {
   const normalizedParams = new URLSearchParams();

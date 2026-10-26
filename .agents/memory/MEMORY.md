@@ -1,3 +1,7 @@
 - [pyzk integration](pyzk.md) — pyzk installed via `python3 -m pip install pyzk`; script at `artifacts/api-server/zk_sync.py`, called via child_process from devices route
 - [PDF reports](pdf-reports.md) — pdfkit used for payslip PDF (externalized in esbuild); attendance uses plain CSV; both served as file downloads from `/api/reports/`
 - [esbuild externals](esbuild-externals.md) — add `pdfkit` to externals in `artifacts/api-server/build.mjs` for any pdfkit-like package with dynamic file loading
+- [OpenAPI Zod exports](api-zod-codegen.md) — inline request schemas can collide with generated TypeScript type exports; keep package barrel exports collision-safe
+- [EMS company isolation](ems-company-isolation.md) — each signup must be a separate company workspace, with tenant isolation enforced in server-side database access
+- [EMS device and shift operations](ems-device-and-shift-ops.md) — device clock writes are admin-confirmed; machine users map to employees; custom shift times apply to selected employees for one date
+- [EMS Oracle deployment](ems-oracle-deployment.md) — the user has an Ubuntu Oracle Cloud VM with Docker and VS Code for self-hosting; avoid publicly exposing Ollama or database ports

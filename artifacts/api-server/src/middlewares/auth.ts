@@ -1,8 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
+import { runWithTenantId } from "@workspace/db";
 import { verifyToken } from "../routes/auth";
 
 export interface AuthRequest extends Request {
-  user?: { id: number; email: string; role: string; name: string };
+  user?: { id: number; email: string; role: string; name: string; tenantId: number };
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
@@ -20,5 +21,5 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   }
 
   req.user = payload;
-  next();
+  runWithTenantId(payload.tenantId, next);
 }

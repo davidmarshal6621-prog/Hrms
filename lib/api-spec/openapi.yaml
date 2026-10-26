@@ -60,6 +60,29 @@ paths:
         "401":
           description: Invalid credentials
 
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [auth]
+      summary: Create a company workspace and its administrator account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupInput"
+      responses:
+        "201":
+          description: Company workspace created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid signup details
+        "409":
+          description: Email already registered
+
   /auth/logout:
     post:
       operationId: logout
@@ -445,6 +468,90 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /employees/{id}/shift-schedule:
+    get:
+      operationId: getEmployeeShiftSchedule
+      tags: [employees]
+      summary: Get a 30-day employee shift chart
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: days
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        "200":
+          description: Employee shift chart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  employeeId:
+                    type: integer
+                  startDate:
+                    type: string
+                    format: date
+                  endDate:
+                    type: string
+                    format: date
+                  days:
+                    type: integer
+                  assignments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                        dayOfWeek:
+                          type: string
+                        hasCustomAssignment:
+                          type: boolean
+                        customShiftId:
+                          type: ["integer", "null"]
+                        customStartTime:
+                          type: ["string", "null"]
+                        customEndTime:
+                          type: ["string", "null"]
+                        shiftId:
+                          type: ["integer", "null"]
+                        shiftName:
+                          type: ["string", "null"]
+                        source:
+                          type: string
+    patch:
+      operationId: updateEmployeeShiftSchedule
+      tags: [employees]
+      summary: Replace a date-based employee shift chart
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeShiftScheduleUpdate"
+      responses:
+        "200":
+          description: Shift chart saved
 
   /attendance:
     get:
@@ -938,6 +1045,105 @@ paths:
         "204":
           description: Deleted
 
+  /shifts/day-overrides:
+    post:
+      operationId: assignCustomShiftHours
+      tags: [shifts]
+      summary: Assign custom working hours to selected employees for one date
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftDayOverrideInput"
+      responses:
+        "200":
+          description: Custom hours assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftDayOverrideResult"
+
+  /devices/{id}/set-time:
+    post:
+      operationId: setDeviceTime
+      tags: [devices]
+      summary: Set the selected ZKTeco device's date and time
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceTimeInput"
+      responses:
+        "200":
+          description: Device time updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceTimeResult"
+
+  /devices/{id}/users:
+    post:
+      operationId: addDeviceUser
+      tags: [devices]
+      summary: Add an employee user to a ZKTeco device and link the machine ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceUserInput"
+      responses:
+        "200":
+          description: Device user added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceUserResult"
+
+  /reports/attendance-csv:
+    get:
+      operationId: exportAttendanceCsv
+      tags: [attendance]
+      summary: Download attendance CSV for a date range
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: employeeId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Attendance CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          description: Invalid date range
+
   /payroll:
     get:
       operationId: listPayroll
@@ -1095,6 +1301,23 @@ components:
         password:
           type: string
 
+    SignupInput:
+      type: object
+      required: [companyName, name, email, password]
+      properties:
+        companyName:
+          type: string
+          minLength: 2
+        name:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+
     AuthResponse:
       type: object
       required: [user, token]
@@ -1106,7 +1329,7 @@ components:
 
     UserProfile:
       type: object
-      required: [id, email, role, name]
+      required: [id, email, role, name, tenantId, tenantName]
       properties:
         id:
           type: integer
@@ -1118,6 +1341,10 @@ components:
           type: string
         employeeId:
           type: ["integer", "null"]
+        tenantId:
+          type: integer
+        tenantName:
+          type: string
 
     User:
       type: object
@@ -1155,6 +1382,10 @@ components:
           type: ["integer", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         dateOfJoining:
           type: ["string", "null"]
         basicSalary:
@@ -1212,6 +1443,10 @@ components:
           type: ["integer", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         designation:
           type: string
         basicSalary:
@@ -1248,6 +1483,10 @@ components:
           type: ["integer", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         designation:
           type: string
         basicSalary:
@@ -1395,6 +1634,10 @@ components:
           type: ["string", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         shiftName:
           type: ["string", "null"]
         dateOfJoining:
@@ -1456,6 +1699,10 @@ components:
           type: ["integer", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         dateOfJoining:
           type: string
         basicSalary:
@@ -1498,6 +1745,10 @@ components:
           type: ["integer", "null"]
         shiftId:
           type: ["integer", "null"]
+        weeklyShiftSchedule:
+          type: object
+          additionalProperties:
+            type: ["integer", "null"]
         dateOfJoining:
           type: string
         basicSalary:
@@ -1645,6 +1896,119 @@ components:
           type: string
         correctedBy:
           type: string
+
+    EmployeeShiftScheduleUpdate:
+      type: object
+      required: [startDate, days, assignments]
+      properties:
+        startDate:
+          type: string
+          format: date
+        days:
+          type: integer
+          minimum: 1
+          maximum: 30
+        assignments:
+          type: array
+          items:
+            $ref: "#/components/schemas/EmployeeShiftAssignmentInput"
+
+    EmployeeShiftAssignmentInput:
+      type: object
+      required: [date, shiftId]
+      properties:
+        date:
+          type: string
+          format: date
+        shiftId:
+          type: ["integer", "null"]
+        customStartTime:
+          type: string
+          pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+        customEndTime:
+          type: string
+          pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+
+    ShiftDayOverrideInput:
+      type: object
+      required: [date, employeeIds, startTime, endTime]
+      properties:
+        date:
+          type: string
+          format: date
+        employeeIds:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: integer
+        startTime:
+          type: string
+          pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+        endTime:
+          type: string
+          pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+
+    ShiftDayOverrideResult:
+      type: object
+      required: [success, date, employeeCount, startTime, endTime]
+      properties:
+        success:
+          type: boolean
+        date:
+          type: string
+          format: date
+        employeeCount:
+          type: integer
+        startTime:
+          type: string
+        endTime:
+          type: string
+
+    DeviceTimeInput:
+      type: object
+      required: [dateTime]
+      properties:
+        dateTime:
+          type: string
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$"
+
+    DeviceTimeResult:
+      type: object
+      required: [success, deviceDateTime]
+      properties:
+        success:
+          type: boolean
+        deviceDateTime:
+          type: string
+
+    DeviceUserInput:
+      type: object
+      required: [employeeId, userId, name]
+      properties:
+        employeeId:
+          type: integer
+          minimum: 1
+        userId:
+          type: string
+          pattern: "^[0-9]{1,9}$"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 24
+
+    DeviceUserResult:
+      type: object
+      required: [success, userId, name, updated]
+      properties:
+        success:
+          type: boolean
+        userId:
+          type: string
+        name:
+          type: string
+        updated:
+          type: boolean
 
     AttendanceSummary:
       type: object

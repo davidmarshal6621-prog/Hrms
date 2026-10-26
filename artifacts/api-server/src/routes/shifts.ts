@@ -1,8 +1,28 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, shiftsTable } from "@workspace/db";
+import { and, eq, inArray } from "drizzle-orm";
+import { db, attendanceTable, employeeShiftAssignmentsTable, employeesTable, shiftsTable } from "@workspace/db";
+import type { AuthRequest } from "../middlewares/auth.js";
 
 const router: IRouter = Router();
+const ADMIN_HR_ROLES = new Set(["super_admin", "admin", "hr"]);
+
+function isIsoDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function isTime(value: unknown): value is string {
+  return typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+function requireAdminOrHr(req: AuthRequest, res: Parameters<Parameters<typeof router.post>[1]>[1]): boolean {
+  if (!ADMIN_HR_ROLES.has(req.user?.role ?? "")) {
+    res.status(403).json({ error: "Only Admin or HR can manage one-day shift overrides" });
+    return false;
+  }
+  return true;
+}
 
 function fmt(s: typeof shiftsTable.$inferSelect) {
   return {
@@ -15,6 +35,101 @@ function fmt(s: typeof shiftsTable.$inferSelect) {
 router.get("/shifts", async (_req, res): Promise<void> => {
   const shifts = await db.select().from(shiftsTable).orderBy(shiftsTable.name);
   res.json(shifts.map(fmt));
+});
+
+router.post("/shifts/day-overrides", async (req: AuthRequest, res): Promise<void> => {
+  if (!requireAdminOrHr(req, res)) return;
+  const tenantId = req.user?.tenantId;
+  if (!tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { date, employeeIds, startTime, endTime } = req.body as {
+    date?: string;
+    employeeIds?: number[];
+    startTime?: string;
+    endTime?: string;
+  };
+  if (!isIsoDate(date)) { res.status(400).json({ error: "A valid date is required" }); return; }
+  if (
+    !Array.isArray(employeeIds)
+    || employeeIds.length === 0
+    || employeeIds.length > 200
+    || !employeeIds.every(id => Number.isInteger(id) && id > 0)
+  ) {
+    res.status(400).json({ error: "Select between 1 and 200 employees" });
+    return;
+  }
+  const selectedIds = [...new Set(employeeIds)];
+  if (!isTime(startTime) || !isTime(endTime) || startTime === endTime) {
+    res.status(400).json({ error: "Enter different, valid start and end times" });
+    return;
+  }
+
+  const employees = await db.select({ id: employeesTable.id }).from(employeesTable)
+    .where(inArray(employeesTable.id, selectedIds));
+  if (employees.length !== selectedIds.length) {
+    res.status(404).json({ error: "One or more selected employees were not found in this company" });
+    return;
+  }
+
+  const employeeIdList = employees.map(employee => employee.id);
+  const [startHour, startMinute] = startTime.split(":").map(Number);
+  const [endHour, endMinute] = endTime.split(":").map(Number);
+  await db.transaction(async tx => {
+    await tx.insert(employeeShiftAssignmentsTable).values(employeeIdList.map(employeeId => ({
+      tenantId,
+      employeeId,
+      assignmentDate: date,
+      shiftId: null,
+      customStartTime: startTime,
+      customEndTime: endTime,
+    }))).onConflictDoUpdate({
+      target: [
+        employeeShiftAssignmentsTable.tenantId,
+        employeeShiftAssignmentsTable.employeeId,
+        employeeShiftAssignmentsTable.assignmentDate,
+      ],
+      set: {
+        shiftId: null,
+        customStartTime: startTime,
+        customEndTime: endTime,
+        updatedAt: new Date(),
+      },
+    });
+
+    const existingAttendance = await tx.select().from(attendanceTable).where(and(
+      inArray(attendanceTable.employeeId, employeeIdList),
+      eq(attendanceTable.date, date),
+      eq(attendanceTable.tenantId, tenantId),
+    ));
+    for (const record of existingAttendance) {
+      if (record.isManuallyEdited) continue;
+      let isLate = false;
+      let isEarlyOut = false;
+      if (record.checkIn) {
+        const cutoff = new Date(record.checkIn);
+        cutoff.setUTCHours(startHour, startMinute + 15, 0, 0);
+        isLate = record.checkIn > cutoff;
+      }
+      if (record.checkOut) {
+        const cutoff = new Date(record.checkOut);
+        cutoff.setUTCHours(endHour, endMinute, 0, 0);
+        isEarlyOut = record.checkOut < cutoff;
+      }
+      const status = ["present", "late"].includes(record.status)
+        ? isLate ? "late" : "present"
+        : record.status;
+      await tx.update(attendanceTable)
+        .set({ isLate, isEarlyOut, status })
+        .where(and(eq(attendanceTable.id, record.id), eq(attendanceTable.tenantId, tenantId)));
+    }
+  });
+
+  res.json({
+    success: true,
+    date,
+    employeeCount: employeeIdList.length,
+    startTime,
+    endTime,
+  });
 });
 
 router.post("/shifts", async (req, res): Promise<void> => {

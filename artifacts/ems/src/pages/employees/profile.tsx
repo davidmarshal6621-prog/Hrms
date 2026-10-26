@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, Link } from "wouter";
-import { useGetEmployee, useListAttendance, useListPayroll } from "@workspace/api-client-react";
+import { useGetEmployee, useListAttendance, useListPayroll, useListShifts } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,8 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { apiUrl } from "@/lib/api-path";
+import { ShiftWeekPicker, WEEKDAYS, type ShiftScheduleValue } from "@/components/shift-week-picker";
+import { EmployeeShiftChart } from "@/components/employee-shift-chart";
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   value: i + 1,
@@ -63,6 +65,7 @@ type EmpData = {
   departmentId?: number | null; departmentName?: string | null;
   branchId?: number | null; branchName?: string | null;
   shiftId?: number | null; shiftName?: string | null;
+  weeklyShiftSchedule?: ShiftScheduleValue | null;
   dateOfJoining?: string | null; basicSalary?: number | null; allowances?: number | null;
   enrollNumber?: string | null; status: string;
   address?: string | null; fatherName?: string | null; emergencyContact?: string | null;
@@ -93,10 +96,13 @@ export default function EmployeeProfile() {
 
   const { data: attendance, isLoading: attLoading } = useListAttendance({ employeeId: empId });
   const { data: payrollList } = useListPayroll({ employeeId: empId });
+  const { data: shifts = [] } = useListShifts();
 
   // Personal info edit state
   const [editingPersonal, setEditingPersonal] = useState(false);
   const [personalForm, setPersonalForm] = useState<Partial<EmpData>>({});
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [weeklySchedule, setWeeklySchedule] = useState<ShiftScheduleValue>({});
 
   // CV state
   const [editingCv, setEditingCv] = useState(false);
@@ -108,6 +114,7 @@ export default function EmployeeProfile() {
       qc.invalidateQueries({ queryKey: ["getEmployee", empId] });
       toast({ title: "Employee updated" });
       setEditingPersonal(false);
+      setEditingSchedule(false);
       setEditingCv(false);
     },
     onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
@@ -126,6 +133,12 @@ export default function EmployeeProfile() {
       profilePhoto: e.profilePhoto ?? "",
     });
     setEditingPersonal(true);
+  }
+
+  function startEditSchedule() {
+    const e = employee as unknown as EmpData;
+    setWeeklySchedule({ ...(e.weeklyShiftSchedule ?? {}) });
+    setEditingSchedule(true);
   }
 
   function startEditCv() {
@@ -438,6 +451,47 @@ export default function EmployeeProfile() {
               </div>
             </div>
 
+            <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4 md:col-span-2">
+              <div className="flex items-center justify-between border-b pb-2">
+                <div>
+                  <h3 className="font-semibold text-sm">Day-wise Shift Schedule</h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Attendance uses the selected shift for that weekday.
+                  </p>
+                </div>
+                {isAdminOrHr && !editingSchedule && (
+                  <Button size="sm" variant="outline" onClick={startEditSchedule}>Edit</Button>
+                )}
+                {editingSchedule && (
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setEditingSchedule(false)}>Cancel</Button>
+                    <Button size="sm" onClick={() => updateMut.mutate({ weeklyShiftSchedule: weeklySchedule })} disabled={updateMut.isPending}>
+                      <Save className="h-3.5 w-3.5 mr-1" />
+                      {updateMut.isPending ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {editingSchedule ? (
+                <ShiftWeekPicker shifts={shifts} value={weeklySchedule} onChange={setWeeklySchedule} />
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                  {WEEKDAYS.map(day => {
+                    const scheduled = emp.weeklyShiftSchedule?.[day.key];
+                    const shift = scheduled ? shifts.find(s => s.id === scheduled) : undefined;
+                    return (
+                      <div key={day.key} className="rounded-md bg-gray-50 p-2">
+                        <div className="text-[11px] font-semibold text-gray-500">{day.label.slice(0, 3)}</div>
+                        <div className="text-xs font-medium text-gray-800 mt-1">
+                          {scheduled === null ? "Off" : shift?.name || "Default"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
               <h3 className="font-semibold text-sm border-b pb-2">Other Details</h3>
               <div className="space-y-3 text-sm">
@@ -485,6 +539,7 @@ export default function EmployeeProfile() {
 
         {/* ── Attendance Tab ────────────────────────────────── */}
         <TabsContent value="attendance" className="space-y-4">
+          <EmployeeShiftChart employeeId={empId} shifts={shifts} canEdit={isAdminOrHr} />
           <div className="flex items-center gap-3 flex-wrap">
             <Select value={String(attMonth)} onValueChange={v => setAttMonth(Number(v))}>
               <SelectTrigger className="w-36 bg-white"><SelectValue /></SelectTrigger>

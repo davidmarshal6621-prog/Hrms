@@ -14,6 +14,16 @@ export interface LoginInput {
   password: string;
 }
 
+export interface SignupInput {
+  /** @minLength 2 */
+  companyName: string;
+  /** @minLength 2 */
+  name: string;
+  email: string;
+  /** @minLength 8 */
+  password: string;
+}
+
 export interface UserProfile {
   id: number;
   email: string;
@@ -21,12 +31,16 @@ export interface UserProfile {
   role: string;
   /** @nullable */
   employeeId?: number | null;
+  tenantId: number;
+  tenantName: string;
 }
 
 export interface AuthResponse {
   user: UserProfile;
   token: string;
 }
+
+export type UserWeeklyShiftSchedule = {[key: string]: number | null};
 
 export interface User {
   id: number;
@@ -56,6 +70,7 @@ export interface User {
   branchId?: number | null;
   /** @nullable */
   shiftId?: number | null;
+  weeklyShiftSchedule?: UserWeeklyShiftSchedule;
   /** @nullable */
   dateOfJoining?: string | null;
   /** @nullable */
@@ -87,6 +102,8 @@ export interface User {
   createdAt: string;
 }
 
+export type UserInputWeeklyShiftSchedule = {[key: string]: number | null};
+
 export interface UserInput {
   email: string;
   password: string;
@@ -103,9 +120,12 @@ export interface UserInput {
   branchId?: number | null;
   /** @nullable */
   shiftId?: number | null;
+  weeklyShiftSchedule?: UserInputWeeklyShiftSchedule;
   designation?: string;
   basicSalary?: number;
 }
+
+export type UserUpdateWeeklyShiftSchedule = {[key: string]: number | null};
 
 export interface UserUpdate {
   email?: string;
@@ -126,6 +146,7 @@ export interface UserUpdate {
   branchId?: number | null;
   /** @nullable */
   shiftId?: number | null;
+  weeklyShiftSchedule?: UserUpdateWeeklyShiftSchedule;
   designation?: string;
   basicSalary?: number;
   allowances?: number;
@@ -201,6 +222,8 @@ export interface DepartmentUpdate {
   isActive?: boolean;
 }
 
+export type EmployeeWeeklyShiftSchedule = {[key: string]: number | null};
+
 /**
  * @nullable
  */
@@ -229,6 +252,7 @@ export interface Employee {
   branchName?: string | null;
   /** @nullable */
   shiftId?: number | null;
+  weeklyShiftSchedule?: EmployeeWeeklyShiftSchedule;
   /** @nullable */
   shiftName?: string | null;
   /** @nullable */
@@ -265,6 +289,8 @@ export interface Employee {
   createdAt: string;
 }
 
+export type EmployeeInputWeeklyShiftSchedule = {[key: string]: number | null};
+
 export interface EmployeeInput {
   firstName: string;
   lastName: string;
@@ -279,6 +305,7 @@ export interface EmployeeInput {
   branchId?: number | null;
   /** @nullable */
   shiftId?: number | null;
+  weeklyShiftSchedule?: EmployeeInputWeeklyShiftSchedule;
   dateOfJoining?: string;
   basicSalary?: number;
   allowances?: number;
@@ -290,6 +317,8 @@ export interface EmployeeInput {
   dateOfBirth?: string;
   gender?: string;
 }
+
+export type EmployeeUpdateWeeklyShiftSchedule = {[key: string]: number | null};
 
 export type EmployeeUpdateCvData = { [key: string]: unknown };
 
@@ -306,6 +335,7 @@ export interface EmployeeUpdate {
   branchId?: number | null;
   /** @nullable */
   shiftId?: number | null;
+  weeklyShiftSchedule?: EmployeeUpdateWeeklyShiftSchedule;
   dateOfJoining?: string;
   basicSalary?: number;
   allowances?: number;
@@ -397,6 +427,76 @@ export interface AttendanceUpdate {
   notes?: string;
   correctionNote?: string;
   correctedBy?: string;
+}
+
+export interface EmployeeShiftAssignmentInput {
+  date: string;
+  /** @nullable */
+  shiftId: number | null;
+  /** @pattern ^(?:[01][0-9]|2[0-3]):[0-5][0-9]$ */
+  customStartTime?: string;
+  /** @pattern ^(?:[01][0-9]|2[0-3]):[0-5][0-9]$ */
+  customEndTime?: string;
+}
+
+export interface EmployeeShiftScheduleUpdate {
+  startDate: string;
+  /**
+     * @minimum 1
+     * @maximum 30
+     */
+  days: number;
+  assignments: EmployeeShiftAssignmentInput[];
+}
+
+export interface ShiftDayOverrideInput {
+  date: string;
+  /**
+     * @minItems 1
+     * @maxItems 200
+     */
+  employeeIds: number[];
+  /** @pattern ^(?:[01][0-9]|2[0-3]):[0-5][0-9]$ */
+  startTime: string;
+  /** @pattern ^(?:[01][0-9]|2[0-3]):[0-5][0-9]$ */
+  endTime: string;
+}
+
+export interface ShiftDayOverrideResult {
+  success: boolean;
+  date: string;
+  employeeCount: number;
+  startTime: string;
+  endTime: string;
+}
+
+export interface DeviceTimeInput {
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$ */
+  dateTime: string;
+}
+
+export interface DeviceTimeResult {
+  success: boolean;
+  deviceDateTime: string;
+}
+
+export interface DeviceUserInput {
+  /** @minimum 1 */
+  employeeId: number;
+  /** @pattern ^[0-9]{1,9}$ */
+  userId: string;
+  /**
+     * @minLength 1
+     * @maxLength 24
+     */
+  name: string;
+}
+
+export interface DeviceUserResult {
+  success: boolean;
+  userId: string;
+  name: string;
+  updated: boolean;
 }
 
 export interface AttendanceSummary {
@@ -644,6 +744,40 @@ status?: string;
 search?: string;
 };
 
+export type GetEmployeeShiftScheduleParams = {
+startDate?: string;
+/**
+ * @minimum 1
+ * @maximum 30
+ */
+days?: number;
+};
+
+export type GetEmployeeShiftSchedule200AssignmentsItem = {
+  date?: string;
+  dayOfWeek?: string;
+  hasCustomAssignment?: boolean;
+  /** @nullable */
+  customShiftId?: number | null;
+  /** @nullable */
+  customStartTime?: string | null;
+  /** @nullable */
+  customEndTime?: string | null;
+  /** @nullable */
+  shiftId?: number | null;
+  /** @nullable */
+  shiftName?: string | null;
+  source?: string;
+};
+
+export type GetEmployeeShiftSchedule200 = {
+  employeeId?: number;
+  startDate?: string;
+  endDate?: string;
+  days?: number;
+  assignments?: GetEmployeeShiftSchedule200AssignmentsItem[];
+};
+
 export type ListAttendanceParams = {
 employeeId?: number;
 date?: string;
@@ -677,6 +811,12 @@ leaveTypeId?: number;
 export type GetLeaveBalanceParams = {
 employeeId: number;
 year?: number;
+};
+
+export type ExportAttendanceCsvParams = {
+startDate?: string;
+endDate?: string;
+employeeId?: number;
 };
 
 export type ListPayrollParams = {

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmployeeUpdateCvData } from './employeeUpdateCvData';
+import type { EmployeeUpdateWeeklyShiftSchedule } from './employeeUpdateWeeklyShiftSchedule';
 
 export interface EmployeeUpdate {
   firstName?: string;
@@ -20,6 +21,7 @@ export interface EmployeeUpdate {
   branchId?: number | null;
   /** @nullable */
   shiftId?: number | null;
+  weeklyShiftSchedule?: EmployeeUpdateWeeklyShiftSchedule;
   dateOfJoining?: string;
   basicSalary?: number;
   allowances?: number;

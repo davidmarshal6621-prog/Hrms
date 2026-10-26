@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const leaveTypesTable = pgTable("leave_types", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   name: text("name").notNull(),
   maxDaysPerYear: integer("max_days_per_year").notNull().default(10),
   isPaid: boolean("is_paid").notNull().default(true),
@@ -14,6 +15,7 @@ export const leaveTypesTable = pgTable("leave_types", {
 
 export const leavesTable = pgTable("leaves", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   employeeId: integer("employee_id").notNull(),
   leaveTypeId: integer("leave_type_id").notNull(),
   startDate: date("start_date", { mode: "string" }).notNull(),

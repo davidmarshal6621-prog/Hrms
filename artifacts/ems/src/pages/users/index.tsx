@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Eye, EyeOff, Copy, Users } from "lucide-react";
+import { ShiftWeekPicker, type ShiftScheduleValue } from "@/components/shift-week-picker";
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const token = localStorage.getItem("ems_token");
@@ -57,6 +58,7 @@ type UserRow = {
   departmentId?: number | null;
   branchId?: number | null;
   shiftId?: number | null;
+  weeklyShiftSchedule?: ShiftScheduleValue | null;
   designation?: string | null;
   basicSalary?: number | null;
   allowances?: number | null;
@@ -86,6 +88,7 @@ type UserForm = {
   departmentId: string;
   branchId: string;
   shiftId: string;
+  weeklyShiftSchedule: ShiftScheduleValue;
   designation: string;
   basicSalary: string;
   allowances: string;
@@ -115,6 +118,7 @@ const emptyForm: UserForm = {
   departmentId: "",
   branchId: "",
   shiftId: "",
+  weeklyShiftSchedule: {},
   designation: "",
   basicSalary: "",
   allowances: "0",
@@ -203,6 +207,7 @@ function formFromUser(user: UserRow): UserForm {
     departmentId: value("departmentId"),
     branchId: value("branchId"),
     shiftId: value("shiftId"),
+    weeklyShiftSchedule: (user.weeklyShiftSchedule ?? {}) as ShiftScheduleValue,
     designation: value("designation"),
     basicSalary: value("basicSalary"),
     allowances: value("allowances") || "0",
@@ -234,6 +239,7 @@ function toPayload(form: UserForm) {
     departmentId: form.departmentId ? Number(form.departmentId) : null,
     branchId: form.branchId ? Number(form.branchId) : null,
     shiftId: form.shiftId ? Number(form.shiftId) : null,
+    weeklyShiftSchedule: form.weeklyShiftSchedule,
     designation: form.designation,
     basicSalary: form.basicSalary === "" ? null : Number(form.basicSalary),
     allowances: form.allowances === "" ? null : Number(form.allowances),
@@ -420,6 +426,19 @@ export default function UsersList() {
                     <SelectContent><SelectItem value="none">No shift</SelectItem>{shifts.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.startTime}-{s.endTime})</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
+                <div className="md:col-span-3 space-y-2">
+                  <div>
+                    <Label>Day-wise Shift Schedule</Label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Choose a different shift for each weekday, or keep the default shift.
+                    </p>
+                  </div>
+                  <ShiftWeekPicker
+                    shifts={shifts}
+                    value={form.weeklyShiftSchedule}
+                    onChange={weeklyShiftSchedule => setForm(current => ({ ...current, weeklyShiftSchedule }))}
+                  />
+                </div>
                 <TextField label="Designation" value={form.designation} onChange={v => updateField("designation", v)} />
                 <TextField label="Basic Salary" value={form.basicSalary} onChange={v => updateField("basicSalary", v)} type="number" />
                 <TextField label="Allowances" value={form.allowances} onChange={v => updateField("allowances", v)} type="number" />

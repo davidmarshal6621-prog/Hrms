@@ -3,12 +3,13 @@ import { eq, ilike, or } from "drizzle-orm";
 import { db, usersTable, employeesTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
 import { getProvisioningDefaults } from "../lib/employee-provisioning.js";
+import { parseWeeklyShiftSchedule, serializeWeeklyShiftSchedule } from "../lib/shift-schedule.js";
 
 const router: IRouter = Router();
 
 const EMPLOYEE_FIELDS = [
   "employeeCode", "firstName", "lastName", "email", "phone", "cnic",
-  "designation", "departmentId", "branchId", "shiftId", "dateOfJoining",
+  "designation", "departmentId", "branchId", "shiftId", "weeklyShiftSchedule", "dateOfJoining",
   "basicSalary", "allowances", "enrollNumber", "status", "address",
   "fatherName", "emergencyContact", "bloodGroup", "dateOfBirth", "gender",
   "religion", "nationality", "profilePhoto",
@@ -38,6 +39,7 @@ function fmtUser(
       departmentId: employee.departmentId,
       branchId: employee.branchId,
       shiftId: employee.shiftId,
+      weeklyShiftSchedule: parseWeeklyShiftSchedule(employee.weeklyShiftSchedule),
       dateOfJoining: employee.dateOfJoining,
       basicSalary: employee.basicSalary,
       allowances: employee.allowances,
@@ -66,7 +68,11 @@ async function employeeMap() {
 function employeeValues(body: Record<string, any>) {
   const values: Record<string, unknown> = {};
   for (const field of EMPLOYEE_FIELDS) {
-    if (body[field] !== undefined) values[field] = body[field] === "" ? null : body[field];
+    if (body[field] !== undefined) {
+      values[field] = field === "weeklyShiftSchedule"
+        ? serializeWeeklyShiftSchedule(body[field])
+        : body[field] === "" ? null : body[field];
+    }
   }
   return values;
 }

@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const attendanceTable = pgTable("attendance", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   employeeId: integer("employee_id").notNull(),
   date: date("date", { mode: "string" }).notNull(),
   checkIn: timestamp("check_in", { withTimezone: true }),

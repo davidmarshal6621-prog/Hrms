@@ -9,6 +9,7 @@ import { setBaseUrl } from "@workspace/api-client-react";
 import { apiBasePath } from "@/lib/api-path";
 
 import Login from "@/pages/login";
+import Signup from "@/pages/signup";
 import Dashboard from "@/pages/dashboard";
 import EmployeesList from "@/pages/employees/index";
 import NewEmployee from "@/pages/employees/new";
@@ -33,15 +34,18 @@ const queryClient = new QueryClient();
 setBaseUrl(apiBasePath || null);
 
 function ProtectedRoute({ component: Component, roles, ...rest }: any) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isSessionLoading, user } = useAuth();
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isAuthenticated && location !== "/login") {
+    if (!isSessionLoading && !isAuthenticated && location !== "/login") {
       setLocation("/login");
     }
-  }, [isAuthenticated, location, setLocation]);
+  }, [isAuthenticated, isSessionLoading, location, setLocation]);
 
+  if (isSessionLoading) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-gray-500">Checking your session…</div>;
+  }
   if (!isAuthenticated) return null;
   if (roles && !roles.includes(user?.role)) {
     return <div className="p-8 text-gray-500">You don't have permission to view this page.</div>;
@@ -61,6 +65,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/signup" component={Signup} />
       <Route path="/" component={() => {
         const [, setLocation] = useLocation();
         useEffect(() => setLocation("/dashboard"), []);
@@ -85,7 +90,7 @@ function Router() {
 
       <Route path="/departments"><ProtectedRoute component={DepartmentsList} roles={ADMIN_ROLES} /></Route>
       <Route path="/branches"><ProtectedRoute component={BranchesList} roles={["super_admin", "admin"]} /></Route>
-      <Route path="/shifts"><ProtectedRoute component={ShiftsList} roles={["super_admin", "admin"]} /></Route>
+      <Route path="/shifts"><ProtectedRoute component={ShiftsList} roles={ADMIN_HR_ROLES} /></Route>
       <Route path="/users"><ProtectedRoute component={UsersList} roles={["super_admin", "admin"]} /></Route>
       <Route path="/devices"><ProtectedRoute component={DevicesPage} roles={["super_admin", "admin"]} /></Route>
 

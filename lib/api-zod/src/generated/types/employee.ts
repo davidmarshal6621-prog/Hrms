@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmployeeCvData } from './employeeCvData';
+import type { EmployeeWeeklyShiftSchedule } from './employeeWeeklyShiftSchedule';
 
 export interface Employee {
   id: number;
@@ -30,6 +31,7 @@ export interface Employee {
   branchName?: string | null;
   /** @nullable */
   shiftId?: number | null;
+  weeklyShiftSchedule?: EmployeeWeeklyShiftSchedule;
   /** @nullable */
   shiftName?: string | null;
   /** @nullable */

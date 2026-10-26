@@ -1,10 +1,11 @@
-import { pgTable, text, serial, timestamp, integer, real, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, real, date, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const employeesTable = pgTable("employees", {
   id: serial("id").primaryKey(),
-  employeeCode: text("employee_code").notNull().unique(),
+  tenantId: integer("tenant_id").notNull().default(1),
+  employeeCode: text("employee_code").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   email: text("email"),
@@ -14,6 +15,7 @@ export const employeesTable = pgTable("employees", {
   departmentId: integer("department_id"),
   branchId: integer("branch_id"),
   shiftId: integer("shift_id"),
+  weeklyShiftSchedule: text("weekly_shift_schedule"),
   dateOfJoining: date("date_of_joining", { mode: "string" }),
   basicSalary: real("basic_salary"),
   allowances: real("allowances").default(0),
@@ -34,7 +36,9 @@ export const employeesTable = pgTable("employees", {
   profilePhoto: text("profile_photo"), // URL or base64
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, table => ({
+  employeeCodeTenantUnique: uniqueIndex("employees_tenant_code_unique").on(table.tenantId, table.employeeCode),
+}));
 
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
